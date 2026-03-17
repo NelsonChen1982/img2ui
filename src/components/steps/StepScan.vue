@@ -4,13 +4,13 @@ import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
 import { I } from '../../data/i18n'
 import { extractColors } from '../../services/colorExtraction'
-import { autoAssignSlots } from '../../services/autoAssignSlots'
 
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
 
 const tasks = ref([])
 const checkedTasks = ref(0)
+const timers = ref([])
 
 function t(obj) {
   if (!obj) return ''
@@ -32,9 +32,10 @@ function startAnalysis() {
   // Animate task completion with delays
   const delays = [600, 1100, 1800, 2500, 3200, 3900]
   taskList.forEach((task, index) => {
-    setTimeout(() => {
+    const id = setTimeout(() => {
       completeTask(index)
     }, delays[index])
+    timers.value.push(id)
   })
 
   // Extract colors and auto-assign
@@ -44,10 +45,17 @@ function startAnalysis() {
   })
 
   // After all tasks complete, move to step 3
-  setTimeout(() => {
+  const finalId = setTimeout(() => {
     pipelineStore.autoAssignSlots()
     pipelineStore.showStep(3)
   }, 4600)
+  timers.value.push(finalId)
+}
+
+function handleBack() {
+  timers.value.forEach(id => clearTimeout(id))
+  timers.value = []
+  pipelineStore.prevStep()
 }
 
 function completeTask(index) {
@@ -60,6 +68,27 @@ function completeTask(index) {
 
 <template>
   <div style="max-width: 760px; margin: 0 auto">
+    <button
+      @click="handleBack"
+      style="
+        margin-bottom: 16px;
+        padding: 6px 14px;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        background: #fff;
+        color: #666;
+        font-size: 13px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s;
+      "
+    >
+      <i class="fa-duotone fa-thin fa-arrow-left" style="font-size: 12px"></i>
+      {{ t(I.back) }}
+    </button>
+
     <h1 style="font-size: 26px; font-weight: 700; color: #111; margin-bottom: 6px">
       {{ t(I.s2.title) }}
     </h1>

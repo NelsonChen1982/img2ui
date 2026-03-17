@@ -16,6 +16,7 @@ import {
 } from '../data/constants.js';
 import { autoAssignSlots } from '../services/autoAssignSlots.js';
 import { buildDS } from '../services/dsBuilder.js';
+import { useSettingsStore } from './settings.js';
 
 export const usePipelineStore = defineStore('pipeline', () => {
   // State
@@ -369,7 +370,8 @@ export const usePipelineStore = defineStore('pipeline', () => {
    * Set email (for compatibility with StepUpload)
    */
   function setEmail(emailVal) {
-    // Delegate to settings store
+    const settingsStore = useSettingsStore()
+    settingsStore.setEmail(emailVal)
   }
 
   return {

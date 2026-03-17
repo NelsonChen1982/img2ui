@@ -196,6 +196,9 @@ async function checkAndIncrementRate(env, ip, email, corsHeaders) {
   const ipKey = `daily:ip:${ip}:${today}`;
   const emailKey = `daily:email:${email.toLowerCase().trim()}:${today}`;
 
+  console.log(`[worker] Rate check — email="${email}", ip="${ip}", date="${today}"`)
+  console.log(`[worker] KV keys — ipKey="${ipKey}", emailKey="${emailKey}"`)
+
   const [ipData, emailData] = await Promise.all([
     env.RATE_LIMIT.get(ipKey, 'json'),
     env.RATE_LIMIT.get(emailKey, 'json'),
@@ -203,6 +206,7 @@ async function checkAndIncrementRate(env, ip, email, corsHeaders) {
 
   const ipCount = ipData?.count || 0;
   const emailCount = emailData?.count || 0;
+  console.log(`[worker] KV counts — ip=${ipCount}/${DAILY_LIMIT}, email=${emailCount}/${DAILY_LIMIT}`)
 
   if (ipCount >= DAILY_LIMIT) {
     return { error: true, response: new Response(
@@ -227,13 +231,17 @@ async function checkAndIncrementRate(env, ip, email, corsHeaders) {
   if (env.EMAIL_LOG) {
     const emailNorm = email.toLowerCase().trim();
     const existing = await env.EMAIL_LOG.get(emailNorm, 'json');
-    await env.EMAIL_LOG.put(emailNorm, JSON.stringify({
+    const emailLogEntry = {
       email: emailNorm,
       firstSeen: existing?.firstSeen || new Date().toISOString(),
       lastUsed: new Date().toISOString(),
       totalUses: (existing?.totalUses || 0) + 1,
       lastIP: ip,
-    }));
+    };
+    await env.EMAIL_LOG.put(emailNorm, JSON.stringify(emailLogEntry));
+    console.log(`[worker] ✅ Email logged to KV:`, JSON.stringify(emailLogEntry))
+  } else {
+    console.warn('[worker] ⚠️ EMAIL_LOG KV not bound — email not persisted')
   }
 
   return { error: false, remaining: DAILY_LIMIT - (ipCount + 1) };

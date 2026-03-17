@@ -673,23 +673,30 @@ async function fallbackIndividualAnalysis(
       let aiResult,
         usedProvider = 'worker';
       if (apiBase) {
+        const emailToSend = getStoredEmail();
+        console.log(`[img2ui] 📤 Worker call (individual): email="${emailToSend}", provider="${window.selectedProvider}", annotation="${a.label}"`)
         const resp = await fetch(`${apiBase}/api/analyze-component`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             image_base64: base64,
             prompt,
-            email: getStoredEmail(),
+            email: emailToSend,
             provider: window.selectedProvider,
           }),
         });
+        console.log(`[img2ui] 📥 Worker response (individual): status=${resp.status}`)
         if (resp.ok) {
           const data = await resp.json();
+          console.log('[img2ui] ✅ Worker parsed result:', { provider: data.provider, hasResult: !!data.parsed })
           aiResult =
             data.parsed ||
             tryParseJSON(data.result?.content?.[0]?.text) ||
             tryParseJSON(data.result?.choices?.[0]?.message?.content);
           usedProvider = data.provider || usedProvider;
+        } else {
+          const errBody = await resp.text()
+          console.error('[img2ui] ❌ Worker error (individual):', errBody)
         }
       } else if (dev.anthropic || dev.openai || dev.gemini) {
         const result = await directAPICall(base64, prompt, 1024, window.selectedProvider, dev);
@@ -756,11 +763,14 @@ export async function analyzeAnnotationsWithAI(context) {
   const hasDirectKey = dev.anthropic || dev.openai || dev.gemini;
   const analysisLog = [];
 
+  console.log(`[img2ui] 📧 Grouped analysis — email="${email}", apiBase="${apiBase || '(none)'}"`)
+
   // Helper: send image + prompt to AI
   async function callAI(base64, prompt, maxTokens) {
     let aiResult,
       usedProvider = window.selectedProvider || 'worker';
     if (apiBase) {
+      console.log(`[img2ui] 📤 Worker call (grouped): email="${email}", provider="${window.selectedProvider}"`)
       const resp = await fetch(`${apiBase}/api/analyze-component`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -771,7 +781,12 @@ export async function analyzeAnnotationsWithAI(context) {
           provider: window.selectedProvider,
         }),
       });
-      if (!resp.ok) throw new Error(`Worker API error ${resp.status}`);
+      console.log(`[img2ui] 📥 Worker response (grouped): status=${resp.status}`)
+      if (!resp.ok) {
+        const errBody = await resp.text()
+        console.error('[img2ui] ❌ Worker error (grouped):', errBody)
+        throw new Error(`Worker API error ${resp.status}`);
+      }
       const data = await resp.json();
       aiResult =
         data.parsed ||
@@ -1129,6 +1144,7 @@ export async function analyzeHolisticDesign(context) {
     let aiResult, usedProvider = window.selectedProvider || 'worker';
 
     if (apiBase) {
+      console.log(`[img2ui] 📤 Worker call (holistic): apiBase="${apiBase}", provider="${window.selectedProvider}"`)
       const resp = await fetch(`${apiBase}/api/analyze-component`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1139,8 +1155,10 @@ export async function analyzeHolisticDesign(context) {
           provider: window.selectedProvider,
         }),
       });
+      console.log(`[img2ui] 📥 Worker response (holistic): status=${resp.status}`)
       if (resp.ok) {
         const data = await resp.json();
+        console.log('[img2ui] ✅ Holistic result:', { provider: data.provider, hasResult: !!data.parsed })
         aiResult =
           data.parsed ||
           tryParseJSON(data.result?.content?.[0]?.text) ||
