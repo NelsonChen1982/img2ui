@@ -1121,6 +1121,7 @@ export async function analyzeHolisticDesign(context) {
   const {
     imageBase64,
     getDevKeys,
+    getStoredEmail,
     knownComponentIds,
     onResult,
   } = context;
@@ -1151,7 +1152,7 @@ export async function analyzeHolisticDesign(context) {
         body: JSON.stringify({
           image_base64: imageBase64,
           prompt,
-          email: '',
+          email: getStoredEmail?.() || '',
           provider: window.selectedProvider,
         }),
       });

@@ -143,6 +143,7 @@ async function startProcessing() {
           openai: settingsStore.devSettings?.openai || '',
           gemini: settingsStore.devSettings?.gemini || '',
         }),
+        getStoredEmail: () => settingsStore.email || '',
         knownComponentIds: ALL_COMP_IDS,
         onResult: (entry) => {
           analysisResults.value = [...analysisResults.value, entry]

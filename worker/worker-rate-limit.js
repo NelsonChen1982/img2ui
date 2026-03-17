@@ -346,7 +346,21 @@ Only return valid JSON, no markdown.`;
 
       // Annotation analysis does NOT count against the main daily limit
       // (it's a sub-call within an already-counted session)
-      // But we still validate the email is known
+      // But we still log the email to EMAIL_LOG KV for collection
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      if (env.EMAIL_LOG) {
+        const emailNorm = email.toLowerCase().trim();
+        const existing = await env.EMAIL_LOG.get(emailNorm, 'json');
+        const emailLogEntry = {
+          email: emailNorm,
+          firstSeen: existing?.firstSeen || new Date().toISOString(),
+          lastUsed: new Date().toISOString(),
+          totalUses: (existing?.totalUses || 0) + 1,
+          lastIP: ip,
+        };
+        await env.EMAIL_LOG.put(emailNorm, JSON.stringify(emailLogEntry));
+        console.log(`[worker] ✅ Email logged (component): ${emailNorm}`, JSON.stringify(emailLogEntry));
+      }
 
       const providerKey = resolveProvider(reqProvider, env);
 

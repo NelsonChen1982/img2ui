@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Environment variables
+.env
+.env.*
+
 # Cloudflare Worker (contains KV namespace IDs)
 worker/wrangler.toml
 

@@ -35,10 +35,26 @@ const languages = [
 ]
 
 // Initialize stores on mount
-onMounted(() => {
+onMounted(async () => {
   settingsStore.init()
   rateLimitStore.init()
   settingsStore.detectLang()
+
+  // ── Debug: check worker connection on startup ──
+  const apiBase = import.meta.env.VITE_API_BASE || settingsStore.devSettings?.base || ''
+  console.log('[img2ui] 🔧 VITE_API_BASE env:', import.meta.env.VITE_API_BASE || '(not set)')
+  console.log('[img2ui] 🔧 devSettings.base:', settingsStore.devSettings?.base || '(not set)')
+  console.log('[img2ui] 🔗 Resolved API base:', apiBase || '⚠️ EMPTY — worker will not be used')
+
+  if (apiBase) {
+    try {
+      const resp = await fetch(`${apiBase}/health`)
+      const data = await resp.json()
+      console.log('[img2ui] ✅ Worker connected:', data)
+    } catch (err) {
+      console.error('[img2ui] ❌ Worker unreachable:', err.message)
+    }
+  }
 })
 
 function handleCSSFrameworkChange(value) {
