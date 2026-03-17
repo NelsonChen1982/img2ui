@@ -42,7 +42,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const email = ref('');
   const rateLimitRemaining = ref(5);
   const devSettings = ref({
-    base: '',
+    base: import.meta.env.VITE_API_BASE || '',
     anthropic: '',
     openai: '',
     gemini: '',
