@@ -80,7 +80,7 @@ async function startProcessing() {
   // Resolve 'auto' to the cheapest available provider based on dev keys
   // Default to gpt4o-mini via worker
   window.selectedProvider = 'gpt4o-mini'
-  window.PIC2UI_API_BASE = settingsStore.devSettings?.base || ''
+  window.PIC2UI_API_BASE = import.meta.env.VITE_API_BASE || settingsStore.devSettings?.base || ''
 
   if (pipelineStore.annotations.length > 0) {
     try {
