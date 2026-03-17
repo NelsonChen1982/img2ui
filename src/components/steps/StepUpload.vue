@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
 import { I } from '../../data/i18n'
@@ -16,11 +16,16 @@ const settingsStore = useSettingsStore()
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
 
+const TURNSTILE_SITE_KEY = '0x4AAAAAACsNmdC4zDbyKXhd'
+
 const email = ref('')
 const emailError = ref('')
 const imageError = ref('')
 const previewFileName = ref('')
 const isDraggingOver = ref(false)
+const turnstileToken = ref('')
+const turnstileEl = ref(null)
+const turnstileWidgetId = ref(null)
 
 const isEmailValid = computed(() => {
   if (!email.value) return false
@@ -28,7 +33,26 @@ const isEmailValid = computed(() => {
   return emailRegex.test(email.value)
 })
 
-const isCtaDisabled = computed(() => !isEmailValid.value || !pipelineStore.uploadedImage)
+const isCtaDisabled = computed(() => !isEmailValid.value || !pipelineStore.uploadedImage || !turnstileToken.value)
+
+// Render Turnstile widget when email becomes valid + image uploaded
+onMounted(() => {
+  watch([isEmailValid, () => pipelineStore.uploadedImage], () => {
+    if (isEmailValid.value && pipelineStore.uploadedImage && !turnstileWidgetId.value) {
+      nextTick(() => {
+        if (turnstileEl.value && window.turnstile) {
+          turnstileWidgetId.value = window.turnstile.render(turnstileEl.value, {
+            sitekey: TURNSTILE_SITE_KEY,
+            size: 'compact',
+            callback: (token) => { turnstileToken.value = token },
+            'expired-callback': () => { turnstileToken.value = '' },
+            'error-callback': () => { turnstileToken.value = '' },
+          })
+        }
+      })
+    }
+  }, { immediate: true })
+})
 
 const rateLimitNotice = computed(() => {
   if (!settingsStore.rateLimitRemaining && settingsStore.rateLimitRemaining !== 0) return ''
@@ -94,10 +118,10 @@ function validateEmailGate() {
 }
 
 async function handleNext() {
-  if (!isEmailValid.value || !pipelineStore.uploadedImage) return
+  if (!isEmailValid.value || !pipelineStore.uploadedImage || !turnstileToken.value) return
   pipelineStore.setEmail(email.value)
 
-  // Upload image to R2 + rate limit check
+  // Upload image to R2 + rate limit check + Turnstile verification
   const apiBase = import.meta.env.VITE_API_BASE || settingsStore.devSettings?.base || ''
   if (apiBase) {
     const base64 = pipelineStore.uploadedImage.split(',')[1] || ''
@@ -106,7 +130,11 @@ async function handleNext() {
         const resp = await fetch(`${apiBase}/api/upload-image`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image_base64: base64, email: email.value }),
+          body: JSON.stringify({
+            image_base64: base64,
+            email: email.value,
+            turnstile_token: turnstileToken.value,
+          }),
         })
         const data = await resp.json()
 
@@ -274,6 +302,13 @@ async function handleNext() {
       <div v-if="emailError" style="font-size: 11px; color: #e05050; margin-top: 4px; min-height: 16px">
         {{ emailError }}
       </div>
+
+      <!-- Turnstile -->
+      <div
+        v-show="isEmailValid && pipelineStore.uploadedImage"
+        ref="turnstileEl"
+        style="margin-top: 12px; display: flex; justify-content: center;"
+      ></div>
 
       <div style="margin-top: 8px; font-size: 12px; color: #aaa; text-align: center">
         {{ t(I.s1.emailHint) }}

@@ -75,6 +75,29 @@ function detectMediaType(base64) {
   return 'image/png';
 }
 
+// ─── Turnstile Verification ───
+
+async function verifyTurnstile(env, token, ip) {
+  if (!env.TURNSTILE_SECRET_KEY) {
+    console.warn('[worker] TURNSTILE_SECRET_KEY not set — skipping verification');
+    return true;
+  }
+  if (!token) return false;
+
+  const resp = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      secret: env.TURNSTILE_SECRET_KEY,
+      response: token,
+      remoteip: ip,
+    }),
+  });
+  const data = await resp.json();
+  console.log(`[worker] Turnstile verify: success=${data.success}`);
+  return data.success === true;
+}
+
 // ─── Multi-Provider API Calls ───
 
 async function callAnthropic(env, providerKey, imageBase64, prompt, maxTokens) {
@@ -323,12 +346,19 @@ export default {
         return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers: corsHeaders });
       }
 
-      const { image_base64: imageBase64, email } = body;
+      const { image_base64: imageBase64, email, turnstile_token: turnstileToken } = body;
       if (!email || !isValidEmail(email)) {
         return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers: corsHeaders });
       }
       if (!imageBase64) {
         return new Response(JSON.stringify({ error: 'missing_image' }), { status: 400, headers: corsHeaders });
+      }
+
+      // Turnstile bot verification
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const turnstileOk = await verifyTurnstile(env, turnstileToken, ip);
+      if (!turnstileOk) {
+        return new Response(JSON.stringify({ error: 'turnstile_failed', message: 'Human verification failed' }), { status: 403, headers: corsHeaders });
       }
 
       // Check size (base64 is ~4/3 of original)
@@ -340,8 +370,6 @@ export default {
           maxSize: MAX_IMAGE_SIZE,
         }), { status: 413, headers: corsHeaders });
       }
-
-      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
 
       // Rate limit check — each upload = 1 daily use
       const rateResult = await checkAndIncrementRate(env, ip, email, corsHeaders);
