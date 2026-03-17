@@ -2,22 +2,24 @@
  * Pic to UI — Cloudflare Worker
  * Claude API Proxy + Multi-Provider Support + Dual Rate Limiting (IP + Email, 5 req/day)
  *
- * Setup:
- * 1. Create a Cloudflare Worker
- * 2. Add KV Namespace: PIC2UI_RATE (bind as RATE_LIMIT)
- * 3. Add KV Namespace: PIC2UI_EMAILS (bind as EMAIL_LOG) — optional, for email collection
- * 4. Add Secrets: ANTHROPIC_API_KEY, OPENAI_API_KEY (optional), GEMINI_API_KEY (optional)
- * 5. Deploy this script
+ * Storage:
+ *   KV  (RATE_LIMIT)  — Daily rate limit counters with TTL auto-expiry
+ *   D1  (DB)          — Email records, design tokens, usage audit log
+ *   R2  (IMAGES)      — Uploaded images (max 5 MB)
  *
  * Endpoints:
  *   POST /api/analyze          — Full image → Design System extraction
  *   POST /api/analyze-component — Cropped annotation → CSS properties extraction
- *   GET  /api/rate-status       — Check remaining daily uses
- *   GET  /health                — Health check
+ *   POST /api/upload-image     — Upload image to R2 (returns image key)
+ *   POST /api/save-result      — Save design tokens + annotations to D1
+ *   GET  /api/history          — Get user's saved design systems
+ *   GET  /api/rate-status      — Check remaining daily uses
+ *   GET  /health               — Health check
  */
 
 const DAILY_LIMIT = 5;
 const RATE_WINDOW = 86400;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 // ─── Provider Configs ───
 const PROVIDERS = {
@@ -53,7 +55,6 @@ function resolveProvider(requested, env) {
   if (requested && requested !== 'auto' && PROVIDERS[requested]) {
     return requested;
   }
-  // Auto: prefer Gemini Flash > GPT-4o Mini > Claude Haiku
   if (env.GEMINI_API_KEY) return 'gemini-flash';
   if (env.OPENAI_API_KEY) return 'gpt4o-mini';
   return 'claude-haiku';
@@ -189,15 +190,12 @@ async function callProvider(env, providerKey, imageBase64, prompt, maxTokens = 4
   }
 }
 
-// ─── Rate Limiting Helpers ───
+// ─── Rate Limiting (KV) ───
 
 async function checkAndIncrementRate(env, ip, email, corsHeaders) {
   const today = todayKey();
   const ipKey = `daily:ip:${ip}:${today}`;
   const emailKey = `daily:email:${email.toLowerCase().trim()}:${today}`;
-
-  console.log(`[worker] Rate check — email="${email}", ip="${ip}", date="${today}"`)
-  console.log(`[worker] KV keys — ipKey="${ipKey}", emailKey="${emailKey}"`)
 
   const [ipData, emailData] = await Promise.all([
     env.RATE_LIMIT.get(ipKey, 'json'),
@@ -206,7 +204,6 @@ async function checkAndIncrementRate(env, ip, email, corsHeaders) {
 
   const ipCount = ipData?.count || 0;
   const emailCount = emailData?.count || 0;
-  console.log(`[worker] KV counts — ip=${ipCount}/${DAILY_LIMIT}, email=${emailCount}/${DAILY_LIMIT}`)
 
   if (ipCount >= DAILY_LIMIT) {
     return { error: true, response: new Response(
@@ -227,24 +224,50 @@ async function checkAndIncrementRate(env, ip, email, corsHeaders) {
     env.RATE_LIMIT.put(emailKey, JSON.stringify({ count: emailCount + 1 }), { expirationTtl: ttl }),
   ]);
 
-  // Log email
-  if (env.EMAIL_LOG) {
-    const emailNorm = email.toLowerCase().trim();
-    const existing = await env.EMAIL_LOG.get(emailNorm, 'json');
-    const emailLogEntry = {
-      email: emailNorm,
-      firstSeen: existing?.firstSeen || new Date().toISOString(),
-      lastUsed: new Date().toISOString(),
-      totalUses: (existing?.totalUses || 0) + 1,
-      lastIP: ip,
-    };
-    await env.EMAIL_LOG.put(emailNorm, JSON.stringify(emailLogEntry));
-    console.log(`[worker] ✅ Email logged to KV:`, JSON.stringify(emailLogEntry))
-  } else {
-    console.warn('[worker] ⚠️ EMAIL_LOG KV not bound — email not persisted')
-  }
-
   return { error: false, remaining: DAILY_LIMIT - (ipCount + 1) };
+}
+
+// ─── D1 Helpers ───
+
+async function upsertEmail(db, email, ip) {
+  const emailNorm = email.toLowerCase().trim();
+  const existing = await db.prepare('SELECT id FROM emails WHERE email = ?').bind(emailNorm).first();
+  if (existing) {
+    await db.prepare('UPDATE emails SET last_used = datetime(\'now\'), total_uses = total_uses + 1, last_ip = ? WHERE email = ?')
+      .bind(ip, emailNorm).run();
+  } else {
+    await db.prepare('INSERT INTO emails (email, last_ip) VALUES (?, ?)')
+      .bind(emailNorm, ip).run();
+  }
+  console.log(`[worker] D1 email upsert: ${emailNorm}`);
+}
+
+async function logUsage(db, email, endpoint, provider, ip, imageKey, usage) {
+  await db.prepare(
+    'INSERT INTO usage_log (email, endpoint, provider, ip, image_key, input_tokens, output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    email.toLowerCase().trim(),
+    endpoint,
+    provider || '',
+    ip,
+    imageKey || '',
+    usage?.inputTokens || 0,
+    usage?.outputTokens || 0,
+  ).run();
+}
+
+async function saveDesignTokens(db, email, imageKey, tokensJson, annotationsJson, holisticJson, provider) {
+  const result = await db.prepare(
+    'INSERT INTO design_tokens (email, image_key, tokens_json, annotations_json, holistic_json, provider) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(
+    email.toLowerCase().trim(),
+    imageKey || '',
+    typeof tokensJson === 'string' ? tokensJson : JSON.stringify(tokensJson),
+    typeof annotationsJson === 'string' ? annotationsJson : JSON.stringify(annotationsJson),
+    typeof holisticJson === 'string' ? holisticJson : JSON.stringify(holisticJson),
+    provider || '',
+  ).run();
+  return result;
 }
 
 // ─── Worker Entry ───
@@ -272,7 +295,16 @@ export default {
       if (env.ANTHROPIC_API_KEY) providers.push('claude-haiku', 'claude-sonnet');
       if (env.OPENAI_API_KEY) providers.push('gpt4o-mini', 'gpt4o');
       if (env.GEMINI_API_KEY) providers.push('gemini-flash');
-      return new Response(JSON.stringify({ status: 'ok', dailyLimit: DAILY_LIMIT, providers }), { headers: corsHeaders });
+      return new Response(JSON.stringify({
+        status: 'ok',
+        dailyLimit: DAILY_LIMIT,
+        providers,
+        storage: {
+          d1: !!env.DB,
+          r2: !!env.IMAGES,
+          kv: !!env.RATE_LIMIT,
+        },
+      }), { headers: corsHeaders });
     }
 
     // Rate limit status
@@ -282,6 +314,117 @@ export default {
       const data = await env.RATE_LIMIT.get(`daily:ip:${ip}:${today}`, 'json');
       const used = data?.count || 0;
       return new Response(JSON.stringify({ remaining: Math.max(0, DAILY_LIMIT - used), limit: DAILY_LIMIT, used }), { headers: corsHeaders });
+    }
+
+    // ─── Upload Image to R2 ───
+    if (url.pathname === '/api/upload-image' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers: corsHeaders });
+      }
+
+      const { image_base64: imageBase64, email } = body;
+      if (!email || !isValidEmail(email)) {
+        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers: corsHeaders });
+      }
+      if (!imageBase64) {
+        return new Response(JSON.stringify({ error: 'missing_image' }), { status: 400, headers: corsHeaders });
+      }
+
+      // Check size (base64 is ~4/3 of original)
+      const estimatedBytes = Math.ceil(imageBase64.length * 3 / 4);
+      if (estimatedBytes > MAX_IMAGE_SIZE) {
+        return new Response(JSON.stringify({
+          error: 'image_too_large',
+          message: `Image exceeds ${MAX_IMAGE_SIZE / 1024 / 1024}MB limit (got ${(estimatedBytes / 1024 / 1024).toFixed(1)}MB)`,
+          maxSize: MAX_IMAGE_SIZE,
+        }), { status: 413, headers: corsHeaders });
+      }
+
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const mediaType = detectMediaType(imageBase64);
+      const ext = mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/webp' ? 'webp' : 'png';
+      const imageKey = `${email.toLowerCase().trim()}/${Date.now()}.${ext}`;
+
+      try {
+        // Decode base64 and upload to R2
+        const binaryData = Uint8Array.from(atob(imageBase64), c => c.charCodeAt(0));
+        await env.IMAGES.put(imageKey, binaryData, {
+          httpMetadata: { contentType: mediaType },
+          customMetadata: { email: email.toLowerCase().trim(), uploadedAt: new Date().toISOString(), ip },
+        });
+
+        // Log to D1
+        if (env.DB) {
+          await upsertEmail(env.DB, email, ip);
+          await logUsage(env.DB, email, 'upload-image', '', ip, imageKey, {});
+        }
+
+        console.log(`[worker] R2 upload: ${imageKey} (${(estimatedBytes / 1024).toFixed(0)} KB)`);
+        return new Response(JSON.stringify({
+          imageKey,
+          size: estimatedBytes,
+          mediaType,
+        }), { headers: corsHeaders });
+      } catch (err) {
+        console.error(`[worker] R2 upload error:`, err.message);
+        return new Response(JSON.stringify({ error: 'upload_failed', message: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // ─── Save Design Result to D1 ───
+    if (url.pathname === '/api/save-result' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers: corsHeaders });
+      }
+
+      const { email, image_key: imageKey, tokens, annotations, holistic, provider } = body;
+      if (!email || !isValidEmail(email)) {
+        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers: corsHeaders });
+      }
+      if (!tokens) {
+        return new Response(JSON.stringify({ error: 'missing_tokens' }), { status: 400, headers: corsHeaders });
+      }
+
+      if (!env.DB) {
+        return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers: corsHeaders });
+      }
+
+      try {
+        const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+        await upsertEmail(env.DB, email, ip);
+        await saveDesignTokens(env.DB, email, imageKey, tokens, annotations || [], holistic || {}, provider);
+        await logUsage(env.DB, email, 'save-result', provider || '', ip, imageKey || '', {});
+
+        console.log(`[worker] D1 saved design tokens for ${email}`);
+        return new Response(JSON.stringify({ saved: true }), { headers: corsHeaders });
+      } catch (err) {
+        console.error(`[worker] D1 save error:`, err.message);
+        return new Response(JSON.stringify({ error: 'save_failed', message: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // ─── Get User History from D1 ───
+    if (url.pathname === '/api/history' && request.method === 'GET') {
+      const email = url.searchParams.get('email');
+      if (!email || !isValidEmail(email)) {
+        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers: corsHeaders });
+      }
+
+      if (!env.DB) {
+        return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers: corsHeaders });
+      }
+
+      try {
+        const rows = await env.DB.prepare(
+          'SELECT id, image_key, tokens_json, annotations_json, holistic_json, provider, created_at FROM design_tokens WHERE email = ? ORDER BY created_at DESC LIMIT 20'
+        ).bind(email.toLowerCase().trim()).all();
+
+        return new Response(JSON.stringify({ results: rows.results || [] }), { headers: corsHeaders });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'query_failed', message: err.message }), { status: 500, headers: corsHeaders });
+      }
     }
 
     // ─── Main Design System Analysis ───
@@ -303,6 +446,11 @@ export default {
       const rateResult = await checkAndIncrementRate(env, ip, email, corsHeaders);
       if (rateResult.error) return rateResult.response;
 
+      // Log to D1
+      if (env.DB) {
+        await upsertEmail(env.DB, email, ip);
+      }
+
       const providerKey = resolveProvider(reqProvider, env);
       const prompt = `Analyze this UI image and extract a Design System. Return JSON with:
 {
@@ -317,6 +465,12 @@ Only return valid JSON, no markdown.`;
 
       try {
         const aiResult = await callProvider(env, providerKey, imageBase64, prompt, 4096);
+
+        // Log usage to D1
+        if (env.DB) {
+          await logUsage(env.DB, email, 'analyze', providerKey, ip, '', aiResult.usage);
+        }
+
         return new Response(JSON.stringify({
           result: aiResult.result,
           parsed: aiResult.parsed,
@@ -345,26 +499,15 @@ Only return valid JSON, no markdown.`;
       }
 
       // Annotation analysis does NOT count against the main daily limit
-      // (it's a sub-call within an already-counted session)
-      // But we still log the email to EMAIL_LOG KV for collection
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      if (env.EMAIL_LOG) {
-        const emailNorm = email.toLowerCase().trim();
-        const existing = await env.EMAIL_LOG.get(emailNorm, 'json');
-        const emailLogEntry = {
-          email: emailNorm,
-          firstSeen: existing?.firstSeen || new Date().toISOString(),
-          lastUsed: new Date().toISOString(),
-          totalUses: (existing?.totalUses || 0) + 1,
-          lastIP: ip,
-        };
-        await env.EMAIL_LOG.put(emailNorm, JSON.stringify(emailLogEntry));
-        console.log(`[worker] ✅ Email logged (component): ${emailNorm}`, JSON.stringify(emailLogEntry));
+
+      // Log to D1
+      if (env.DB) {
+        await upsertEmail(env.DB, email, ip);
       }
 
       const providerKey = resolveProvider(reqProvider, env);
 
-      // Use custom prompt from frontend, or default component analysis prompt
       const prompt = customPrompt || `Analyze this cropped UI element (type: ${componentType || 'unknown'}). Return ONLY valid JSON:
 {
   "elementType": "${componentType || 'unknown'}",
@@ -385,6 +528,12 @@ Only return valid JSON, no markdown.`;
 
       try {
         const aiResult = await callProvider(env, providerKey, imageBase64, prompt, 1024);
+
+        // Log usage to D1
+        if (env.DB) {
+          await logUsage(env.DB, email, 'analyze-component', providerKey, ip, '', aiResult.usage);
+        }
+
         return new Response(JSON.stringify({
           result: aiResult.result,
           parsed: aiResult.parsed,
@@ -397,7 +546,18 @@ Only return valid JSON, no markdown.`;
     }
 
     return new Response(
-      JSON.stringify({ error: 'not_found', endpoints: ['/api/analyze', '/api/analyze-component', '/api/rate-status', '/health'] }),
+      JSON.stringify({
+        error: 'not_found',
+        endpoints: [
+          '/api/analyze',
+          '/api/analyze-component',
+          '/api/upload-image',
+          '/api/save-result',
+          '/api/history',
+          '/api/rate-status',
+          '/health',
+        ],
+      }),
       { status: 404, headers: corsHeaders }
     );
   },

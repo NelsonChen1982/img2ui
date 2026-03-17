@@ -14,8 +14,11 @@ function t(obj) {
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
 
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
+
 const email = ref('')
 const emailError = ref('')
+const imageError = ref('')
 const previewFileName = ref('')
 const isDraggingOver = ref(false)
 
@@ -68,6 +71,12 @@ function handleFileSelect(event) {
 }
 
 function loadFile(file) {
+  imageError.value = ''
+  if (file.size > MAX_IMAGE_SIZE) {
+    const sizeMB = (file.size / 1024 / 1024).toFixed(1)
+    imageError.value = t(I.s1.imageTooLarge).replace('{size}', sizeMB).replace('{max}', '5')
+    return
+  }
   const reader = new FileReader()
   reader.onload = (e) => {
     const dataUrl = e.target.result
@@ -84,9 +93,34 @@ function validateEmailGate() {
   }
 }
 
-function handleNext() {
+async function handleNext() {
   if (!isEmailValid.value || !pipelineStore.uploadedImage) return
   pipelineStore.setEmail(email.value)
+
+  // Upload image to R2 (non-blocking — don't prevent navigation on failure)
+  const apiBase = import.meta.env.VITE_API_BASE || settingsStore.devSettings?.base || ''
+  if (apiBase) {
+    const base64 = pipelineStore.uploadedImage.split(',')[1] || ''
+    if (base64) {
+      try {
+        const resp = await fetch(`${apiBase}/api/upload-image`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_base64: base64, email: email.value }),
+        })
+        const data = await resp.json()
+        if (data.imageKey) {
+          pipelineStore.imageKey = data.imageKey
+          console.log('[img2ui] R2 upload OK:', data.imageKey)
+        } else {
+          console.warn('[img2ui] R2 upload response:', data)
+        }
+      } catch (err) {
+        console.warn('[img2ui] R2 upload failed (continuing):', err.message)
+      }
+    }
+  }
+
   pipelineStore.nextStep()
 }
 </script>
@@ -155,6 +189,7 @@ function handleNext() {
           {{ t(I.s1.drop) }}
         </div>
         <div style="color: #aaa; font-size: 14px">{{ t(I.s1.hint) }}</div>
+        <div style="font-size: 11px; color: #bbb; margin-top: 6px">{{ t(I.s1.maxSize) }}</div>
       </div>
 
       <div v-else>
@@ -171,6 +206,10 @@ function handleNext() {
           {{ t(I.s1.reselect) }}
         </div>
       </div>
+    </div>
+
+    <div v-if="imageError" style="font-size: 12px; color: #e05050; margin-top: 8px; text-align: center">
+      {{ imageError }}
     </div>
 
     <!-- Email Gate + CTA -->

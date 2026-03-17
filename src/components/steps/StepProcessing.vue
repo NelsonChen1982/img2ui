@@ -156,13 +156,37 @@ async function startProcessing() {
   }
 
   // Final progress
-  setTimeout(() => {
+  setTimeout(async () => {
     progress.value = 100
     annoProgress.value = ''
     clearInterval(progressInterval)
 
-    // Build UI Kit and go to step 7
+    // Build UI Kit
     pipelineStore.buildDS()
+
+    // Save result to D1 (non-blocking)
+    const apiBase = window.PIC2UI_API_BASE || ''
+    if (apiBase && settingsStore.email) {
+      try {
+        const resp = await fetch(`${apiBase}/api/save-result`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: settingsStore.email,
+            image_key: pipelineStore.imageKey || '',
+            tokens: pipelineStore.DS,
+            annotations: pipelineStore.annotations,
+            holistic: pipelineStore.holisticResult,
+            provider: window.selectedProvider || '',
+          }),
+        })
+        const data = await resp.json()
+        console.log('[img2ui] D1 save result:', data)
+      } catch (err) {
+        console.warn('[img2ui] D1 save failed (continuing):', err.message)
+      }
+    }
+
     setTimeout(() => {
       pipelineStore.showStep(7)
     }, 600)
