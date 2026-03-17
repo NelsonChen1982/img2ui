@@ -25,7 +25,7 @@ const isEmailValid = computed(() => {
   return emailRegex.test(email.value)
 })
 
-const isCtaDisabled = computed(() => !isEmailValid.value)
+const isCtaDisabled = computed(() => !isEmailValid.value || !pipelineStore.uploadedImage)
 
 const rateLimitNotice = computed(() => {
   if (!settingsStore.rateLimitRemaining && settingsStore.rateLimitRemaining !== 0) return ''
@@ -85,7 +85,7 @@ function validateEmailGate() {
 }
 
 function handleNext() {
-  if (!isEmailValid.value) return
+  if (!isEmailValid.value || !pipelineStore.uploadedImage) return
   pipelineStore.setEmail(email.value)
   pipelineStore.nextStep()
 }
