@@ -342,6 +342,11 @@ export default {
       }
 
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+      // Rate limit check — each upload = 1 daily use
+      const rateResult = await checkAndIncrementRate(env, ip, email, corsHeaders);
+      if (rateResult.error) return rateResult.response;
+
       const mediaType = detectMediaType(imageBase64);
       const ext = mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/webp' ? 'webp' : 'png';
       const imageKey = `${email.toLowerCase().trim()}/${Date.now()}.${ext}`;
@@ -365,6 +370,7 @@ export default {
           imageKey,
           size: estimatedBytes,
           mediaType,
+          rateLimit: { remaining: rateResult.remaining, limit: DAILY_LIMIT },
         }), { headers: corsHeaders });
       } catch (err) {
         console.error(`[worker] R2 upload error:`, err.message);

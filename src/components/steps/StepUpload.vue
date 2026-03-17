@@ -97,7 +97,7 @@ async function handleNext() {
   if (!isEmailValid.value || !pipelineStore.uploadedImage) return
   pipelineStore.setEmail(email.value)
 
-  // Upload image to R2 (non-blocking — don't prevent navigation on failure)
+  // Upload image to R2 + rate limit check
   const apiBase = import.meta.env.VITE_API_BASE || settingsStore.devSettings?.base || ''
   if (apiBase) {
     const base64 = pipelineStore.uploadedImage.split(',')[1] || ''
@@ -109,11 +109,20 @@ async function handleNext() {
           body: JSON.stringify({ image_base64: base64, email: email.value }),
         })
         const data = await resp.json()
+
+        if (resp.status === 429) {
+          // Rate limited — block navigation
+          settingsStore.rateLimitRemaining = 0
+          emailError.value = t(I.s1.rateLimitExceeded)
+          return
+        }
+
         if (data.imageKey) {
           pipelineStore.imageKey = data.imageKey
           console.log('[img2ui] R2 upload OK:', data.imageKey)
-        } else {
-          console.warn('[img2ui] R2 upload response:', data)
+        }
+        if (data.rateLimit) {
+          settingsStore.rateLimitRemaining = data.rateLimit.remaining
         }
       } catch (err) {
         console.warn('[img2ui] R2 upload failed (continuing):', err.message)
