@@ -1,0 +1,103 @@
+export const I = {
+  steps: { zh:['上傳圖片','AI 辨識','色彩微調','元件標注','產出中…','UI Kit'], en:['Upload','AI Scan','Color Tune','Annotate','Generating…','UI Kit'], ja:['アップロード','AI分析','色調整','注釈','生成中…','UIキット'] },
+  titles: {
+    zh:{ 1:'上傳參考圖片',2:'AI 辨識設計語言…',3:'色彩微調',5:'元件標注（選填）',6:'正在產出 UI Kit…',7:'UI Kit' },
+    en:{ 1:'Upload Reference Image',2:'Analyzing Design Language…',3:'Color Tuning',5:'Component Annotation (Optional)',6:'Generating UI Kit…',7:'UI Kit' },
+    ja:{ 1:'参照画像をアップロード',2:'デザイン言語を分析中…',3:'色調整',5:'コンポーネント注釈（任意）',6:'UIキット生成中…',7:'UIキット' },
+  },
+  back: { zh:'上一步', en:'Back', ja:'戻る' },
+  s1: {
+    title: { zh:'從任意圖片萃取 Design System', en:'Extract Design System from Any Image', ja:'あらゆる画像からデザインシステムを抽出' },
+    desc: {
+      zh:'上傳任何圖片 — UI 截圖、設計稿、照片、插圖皆可。AI 自動萃取配色與元件風格，字體可自由選擇，產出可直接用於 coding agent 的 Design System 規範。',
+      en:'Upload any image — UI screenshots, mockups, photos, illustrations. AI extracts colors and component styles; fonts are freely selectable. Outputs a Design System spec ready for coding agents.',
+      ja:'どんな画像でもOK — UIスクリーンショット、デザイン案、写真、イラスト。AIが配色・コンポーネントスタイルを抽出、フォントは自由に選択可能。コーディングエージェント用のデザインシステム仕様を生成します。'
+    },
+    features: {
+      zh:[{fa:'fa-palette',t:'自動配色萃取'},{fa:'fa-font',t:'字體自由選配'},{fa:'fa-puzzle-piece',t:'25 種元件模板'},{fa:'fa-file-export',t:'SKILL.md 輸出'}],
+      en:[{fa:'fa-palette',t:'Auto Color Extract'},{fa:'fa-font',t:'Selectable Fonts'},{fa:'fa-puzzle-piece',t:'25 Component Types'},{fa:'fa-file-export',t:'SKILL.md Export'}],
+      ja:[{fa:'fa-palette',t:'自動配色抽出'},{fa:'fa-font',t:'フォント自由選択'},{fa:'fa-puzzle-piece',t:'25コンポーネント'},{fa:'fa-file-export',t:'SKILL.md出力'}],
+    },
+    drop: { zh:'拖拉圖片到這裡', en:'Drop image here', ja:'画像をここにドラッグ' },
+    hint: { zh:'或點擊選擇 · PNG / JPG / WebP', en:'or click to select · PNG / JPG / WebP', ja:'またはクリックして選択 · PNG / JPG / WebP' },
+    reselect: { zh:'點擊重新選擇', en:'Click to reselect', ja:'クリックして再選択' },
+    local: { zh:'圖片僅在本地瀏覽器端處理，不上傳至伺服器', en:'Images processed locally in your browser only', ja:'画像はブラウザ内でのみ処理されます' },
+    next: { zh:'開始辨識', en:'Start Analysis', ja:'分析開始' },
+    emailHint: { zh:'輸入 Email 接收更新通知，即可免費使用', en:'Enter your email for update notifications to use for free', ja:'メールを入力して更新通知を受け取り、無料でご利用ください' },
+    emailError: { zh:'請輸入有效的 Email', en:'Please enter a valid email', ja:'有効なメールを入力してください' },
+    emailPlaceholder: { zh:'you@example.com', en:'you@example.com', ja:'you@example.com' },
+    rateLimitMsg: { zh:'每日可使用 {n} 次（剩餘 {r} 次）', en:'{n} uses per day ({r} remaining)', ja:'1日{n}回使用可能（残り{r}回）' },
+    rateLimitExceeded: { zh:'今日使用次數已達上限，明天再試', en:'Daily limit reached, try again tomorrow', ja:'本日の使用回数上限に達しました。明日再度お試しください' },
+  },
+  s2: {
+    title: { zh:'AI 辨識中…', en:'AI Analyzing…', ja:'AI分析中…' },
+    desc: { zh:'正在萃取配色系統、排版結構與元件風格語意', en:'Extracting color system, layout structure, and component semantics', ja:'配色システム、レイアウト構造、コンポーネントセマンティクスを抽出中' },
+    scanning: { zh:'掃描中...', en:'Scanning...', ja:'スキャン中...' },
+    tasks: {
+      zh:[{l:'配色萃取',s:'K-means + 頻率加權'},{l:'明暗偵測',s:'全圖亮度平均'},{l:'排版結構',s:'Grid / Flex 推論'},{l:'文字層級',s:'OCR + 字重推論'},{l:'元件語意',s:'UI Component Classifier'},{l:'產出 Tokens',s:'Design System IR'}],
+      en:[{l:'Color Extraction',s:'K-means + frequency weighting'},{l:'Luminance Detection',s:'Average brightness'},{l:'Layout Structure',s:'Grid / Flex inference'},{l:'Typography Levels',s:'OCR + weight inference'},{l:'Component Semantics',s:'UI Component Classifier'},{l:'Generate Tokens',s:'Design System IR'}],
+      ja:[{l:'配色抽出',s:'K-means + 頻度加重'},{l:'明暗検出',s:'平均輝度'},{l:'レイアウト構造',s:'Grid/Flex推論'},{l:'文字階層',s:'OCR + ウェイト推論'},{l:'コンポーネント意味',s:'UIコンポーネント分類'},{l:'トークン生成',s:'デザインシステムIR'}],
+    },
+  },
+  s3: {
+    title: { zh:'色彩配置', en:'Color Configuration', ja:'カラー設定' },
+    desc: { zh:'上方是從圖片萃取的色盤，可點擊調色或新增。下方是語義色彩插槽，決定元件最終配色。', en:'Top: extracted palette — click to adjust or add colors. Bottom: semantic color slots that determine component styling.', ja:'上：抽出パレット — クリックで調整・追加。下：セマンティックカラースロット — コンポーネントの配色を決定。' },
+    palette: { zh:'萃取色盤', en:'EXTRACTED PALETTE', ja:'抽出パレット' },
+    addColor: { zh:'+ 新增顏色', en:'+ Add Color', ja:'+ 色を追加' },
+    slots: { zh:'語義色彩插槽', en:'SEMANTIC COLOR SLOTS', ja:'セマンティックカラースロット' },
+    slotsDesc: { zh:'自動帶入，可自由切換', en:'Auto-assigned, click to change', ja:'自動割当、クリックで変更' },
+    fonts: { zh:'字體設定', en:'FONT SETTINGS', ja:'フォント設定' },
+    fontsDesc: { zh:'選擇 Google Fonts，套用到標題與內文', en:'Pick Google Fonts for headings & body', ja:'見出しと本文にGoogle Fontsを選択' },
+    headingFont: { zh:'標題字體', en:'Heading Font', ja:'見出しフォント' },
+    bodyFont: { zh:'內文字體', en:'Body Font', ja:'本文フォント' },
+    next: { zh:'元件標注', en:'Annotate', ja:'注釈' },
+  },
+  s5: {
+    title: { zh:'元件標注', en:'Component Annotation', ja:'コンポーネント注釈' },
+    opt: { zh:'選填', en:'Optional', ja:'任意' },
+    desc: { zh:'先選上方元件類型 → 拖拉框選 · 未標注則顯示全部', en:'Select type above → drag to annotate · Skip shows all', ja:'上のタイプを選択 → ドラッグで注釈 · スキップで全表示' },
+    disclaimer: { zh:'標注僅供參考，實際產出成果會依圖片品質及模型解讀有所差異', en:'Annotations are for reference only. Results may vary based on image quality and model interpretation.', ja:'注釈は参考用です。実際の結果は画像品質やモデルの解釈により異なる場合があります。' },
+    hint: { zh:'先選上方元件類型', en:'Select type above first', ja:'上のタイプを先に選択' },
+    clear: { zh:'清除', en:'Clear', ja:'クリア' },
+    skip: { zh:'略過', en:'Skip', ja:'スキップ' },
+    next: { zh:'完成標注，產出 UI Kit', en:'Done, Generate UI Kit', ja:'注釈完了、UIキット生成' },
+    none: { zh:'尚未標注', en:'No annotations yet', ja:'注釈なし' },
+  },
+  s6: {
+    title: { zh:'正在產出 UI Kit…', en:'Generating UI Kit…', ja:'UIキット生成中…' },
+    desc: { zh:'根據標注位置與色彩設定，產出對應元件設計', en:'Generating component designs from annotations and color settings', ja:'注釈と色設定からコンポーネントデザインを生成中' },
+    tasks: {
+      zh:['對應標注區域到元件類型','套用 Design Tokens 到元件','產生元件變體與狀態','組合 UI Kit 展示'],
+      en:['Mapping annotated regions to component types','Applying design tokens to components','Generating component variants & states','Assembling UI Kit display'],
+      ja:['注釈領域をコンポーネントタイプにマッピング','デザイントークンをコンポーネントに適用','コンポーネントバリアント＆ステートを生成','UIキット表示を組み立て'],
+    },
+  },
+  s7: {
+    desc: { zh:'基於圖片萃取的 Design System · 全部 25 種元件', en:'Design System extracted from image · All 25 component types', ja:'画像から抽出したデザインシステム · 全25コンポーネント' },
+    restart: { zh:'重新製作', en:'Start Over', ja:'最初から' },
+    editColors: { zh:'調整配色', en:'Edit Colors', ja:'配色調整' },
+    editAnnotations: { zh:'修改標注', en:'Edit Annotations', ja:'注釈編集' },
+    jsonLabel: { zh:'設計系統 JSON', en:'DESIGN SYSTEM JSON', ja:'デザインシステム JSON' },
+    copy: { zh:'複製', en:'Copy', ja:'コピー' },
+    copied: { zh:'已複製！', en:'Copied!', ja:'コピー済み！' },
+    dlJSON: { zh:'JSON', en:'JSON', ja:'JSON' },
+    dlSkill: { zh:'SKILL.md', en:'SKILL.md', ja:'SKILL.md' },
+    dlHTML: { zh:'預覽 HTML', en:'Preview HTML', ja:'プレビュー HTML' },
+  },
+  slotLabels: {
+    primary:  { zh:'主色',   en:'Primary',   ja:'メイン' },
+    secondary:{ zh:'副色',   en:'Secondary', ja:'サブ' },
+    accent:   { zh:'強調',   en:'Accent',    ja:'アクセント' },
+    success:  { zh:'成功',   en:'Success',   ja:'成功' },
+    warning:  { zh:'警告',   en:'Warning',   ja:'警告' },
+    danger:   { zh:'錯誤',   en:'Danger',    ja:'エラー' },
+    info:     { zh:'資訊',   en:'Info',      ja:'情報' },
+    surface:  { zh:'表面',   en:'Surface',   ja:'表面' },
+    text:     { zh:'文字',   en:'Text',      ja:'テキスト' },
+    border:   { zh:'邊框',   en:'Border',    ja:'ボーダー' },
+  },
+};
+
+export function t(obj, lang = 'en') {
+  return obj[lang] || obj.en || '';
+}
