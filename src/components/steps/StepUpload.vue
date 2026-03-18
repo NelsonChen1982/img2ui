@@ -26,6 +26,7 @@ const isDraggingOver = ref(false)
 const turnstileToken = ref('')
 const turnstileEl = ref(null)
 const turnstileWidgetId = ref(null)
+const submitting = ref(false)
 
 const isEmailValid = computed(() => {
   if (!email.value) return false
@@ -34,7 +35,7 @@ const isEmailValid = computed(() => {
 })
 
 const isDev = import.meta.env.DEV
-const isCtaDisabled = computed(() => !isEmailValid.value || !pipelineStore.uploadedImage || (!isDev && !turnstileToken.value))
+const isCtaDisabled = computed(() => submitting.value || !isEmailValid.value || !pipelineStore.uploadedImage || (!isDev && !turnstileToken.value))
 
 // Render Turnstile widget when email becomes valid + image uploaded
 onMounted(() => {
@@ -120,7 +121,8 @@ function validateEmailGate() {
 }
 
 async function handleNext() {
-  if (!isEmailValid.value || !pipelineStore.uploadedImage || (!isDev && !turnstileToken.value)) return
+  if (submitting.value || !isEmailValid.value || !pipelineStore.uploadedImage || (!isDev && !turnstileToken.value)) return
+  submitting.value = true
   pipelineStore.setEmail(email.value)
 
   // Upload image to R2 + rate limit check + Turnstile verification
@@ -144,6 +146,7 @@ async function handleNext() {
           // Rate limited — block navigation
           settingsStore.rateLimitRemaining = 0
           emailError.value = t(I.s1.rateLimitExceeded)
+          submitting.value = false
           return
         }
 
@@ -160,6 +163,7 @@ async function handleNext() {
         }
       } catch (err) {
         console.warn('[img2ui] R2 upload failed (continuing):', err.message)
+        submitting.value = false
       }
     }
   }
