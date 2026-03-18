@@ -1,25 +1,41 @@
 /**
  * Pic to UI — Cloudflare Worker
- * Claude API Proxy + Multi-Provider Support + Dual Rate Limiting (IP + Email, 5 req/day)
+ * Claude API Proxy + Multi-Provider Support + Rate Limiting + Session Auth
  *
  * Storage:
  *   KV  (RATE_LIMIT)  — Daily rate limit counters with TTL auto-expiry
  *   D1  (DB)          — Email records, design tokens, usage audit log
  *   R2  (IMAGES)      — Uploaded images (max 5 MB)
  *
+ * Security:
+ *   - Turnstile bot verification on upload
+ *   - HMAC session tokens issued on upload, required for all subsequent calls
+ *   - Per-IP rate limits on upload (5/day) and component analysis (10/day)
+ *   - CORS restricted to allowed origins
+ *   - Request body size limits
+ *
  * Endpoints:
- *   POST /api/analyze          — Full image → Design System extraction
- *   POST /api/analyze-component — Cropped annotation → CSS properties extraction
- *   POST /api/upload-image     — Upload image to R2 (returns image key)
- *   POST /api/save-result      — Save design tokens + annotations to D1
- *   GET  /api/history          — Get user's saved design systems
- *   GET  /api/rate-status      — Check remaining daily uses
- *   GET  /health               — Health check
+ *   POST /api/upload-image      — Upload image to R2 (Turnstile + rate limit, issues session token)
+ *   POST /api/analyze           — Full image → Design System extraction (session token required)
+ *   POST /api/analyze-component — Cropped annotation → CSS extraction (session token + rate limit)
+ *   POST /api/save-result       — Save design tokens to D1 (session token required)
+ *   GET  /api/history           — Get user's saved design systems (session token required)
+ *   GET  /api/rate-status       — Check remaining daily uses
+ *   GET  /health                — Health check
  */
 
 const DAILY_LIMIT = 5;
+const COMPONENT_DAILY_LIMIT = 10;
 const RATE_WINDOW = 86400;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_BODY_SIZE = 7 * 1024 * 1024;  // 7 MB (base64 overhead)
+const ALLOWED_ORIGINS = [
+  'https://img2ui.com',
+  'https://www.img2ui.com',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:4173',
+];
 
 // ─── Provider Configs ───
 const PROVIDERS = {
@@ -50,7 +66,6 @@ const PROVIDERS = {
   },
 };
 
-// Auto provider = cheapest available
 function resolveProvider(requested, env) {
   if (requested && requested !== 'auto' && PROVIDERS[requested]) {
     return requested;
@@ -64,6 +79,15 @@ function isValidEmail(str) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((str || '').trim());
 }
 
+// Normalize email: lowercase, trim, strip plus-addressing
+function normalizeEmail(str) {
+  const email = (str || '').toLowerCase().trim();
+  const [local, domain] = email.split('@');
+  if (!local || !domain) return email;
+  const stripped = local.split('+')[0];
+  return `${stripped}@${domain}`;
+}
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -73,6 +97,44 @@ function detectMediaType(base64) {
   if (base64.startsWith('iVBOR')) return 'image/png';
   if (base64.startsWith('UklGR')) return 'image/webp';
   return 'image/png';
+}
+
+// ─── CORS ───
+
+function getCorsOrigin(request) {
+  const origin = request.headers.get('Origin') || '';
+  if (ALLOWED_ORIGINS.includes(origin)) return origin;
+  return ALLOWED_ORIGINS[0]; // default to production
+}
+
+function corsHeaders(request) {
+  return {
+    'Access-Control-Allow-Origin': getCorsOrigin(request),
+    'Content-Type': 'application/json',
+  };
+}
+
+// ─── Session Token (HMAC-SHA256) ───
+
+async function signSession(env, email, ip) {
+  const secret = env.TURNSTILE_SECRET_KEY || 'dev-fallback-key';
+  const payload = `${normalizeEmail(email)}:${ip}:${todayKey()}`;
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
+  const token = btoa(String.fromCharCode(...new Uint8Array(sig)));
+  return token;
+}
+
+async function verifySession(env, token, email, ip) {
+  if (!token) return false;
+  const expected = await signSession(env, email, ip);
+  return token === expected;
 }
 
 // ─── Turnstile Verification ───
@@ -215,10 +277,11 @@ async function callProvider(env, providerKey, imageBase64, prompt, maxTokens = 4
 
 // ─── Rate Limiting (KV) ───
 
-async function checkAndIncrementRate(env, ip, email, corsHeaders) {
+async function checkAndIncrementRate(env, ip, email, headers, limit = DAILY_LIMIT, prefix = 'daily') {
   const today = todayKey();
-  const ipKey = `daily:ip:${ip}:${today}`;
-  const emailKey = `daily:email:${email.toLowerCase().trim()}:${today}`;
+  const emailNorm = normalizeEmail(email);
+  const ipKey = `${prefix}:ip:${ip}:${today}`;
+  const emailKey = `${prefix}:email:${emailNorm}:${today}`;
 
   const [ipData, emailData] = await Promise.all([
     env.RATE_LIMIT.get(ipKey, 'json'),
@@ -228,16 +291,16 @@ async function checkAndIncrementRate(env, ip, email, corsHeaders) {
   const ipCount = ipData?.count || 0;
   const emailCount = emailData?.count || 0;
 
-  if (ipCount >= DAILY_LIMIT) {
+  if (ipCount >= limit) {
     return { error: true, response: new Response(
-      JSON.stringify({ error: 'rate_limited', message: `IP daily limit (${DAILY_LIMIT}) reached.`, remaining: 0, limitType: 'ip' }),
-      { status: 429, headers: corsHeaders }
+      JSON.stringify({ error: 'rate_limited', message: `IP daily limit (${limit}) reached.`, remaining: 0, limitType: 'ip' }),
+      { status: 429, headers }
     )};
   }
-  if (emailCount >= DAILY_LIMIT) {
+  if (emailCount >= limit) {
     return { error: true, response: new Response(
-      JSON.stringify({ error: 'rate_limited', message: `Email daily limit (${DAILY_LIMIT}) reached.`, remaining: 0, limitType: 'email' }),
-      { status: 429, headers: corsHeaders }
+      JSON.stringify({ error: 'rate_limited', message: `Email daily limit (${limit}) reached.`, remaining: 0, limitType: 'email' }),
+      { status: 429, headers }
     )};
   }
 
@@ -247,13 +310,13 @@ async function checkAndIncrementRate(env, ip, email, corsHeaders) {
     env.RATE_LIMIT.put(emailKey, JSON.stringify({ count: emailCount + 1 }), { expirationTtl: ttl }),
   ]);
 
-  return { error: false, remaining: DAILY_LIMIT - (ipCount + 1) };
+  return { error: false, remaining: limit - (ipCount + 1) };
 }
 
 // ─── D1 Helpers ───
 
 async function upsertEmail(db, email, ip) {
-  const emailNorm = email.toLowerCase().trim();
+  const emailNorm = normalizeEmail(email);
   const existing = await db.prepare('SELECT id FROM emails WHERE email = ?').bind(emailNorm).first();
   if (existing) {
     await db.prepare('UPDATE emails SET last_used = datetime(\'now\'), total_uses = total_uses + 1, last_ip = ? WHERE email = ?')
@@ -262,72 +325,65 @@ async function upsertEmail(db, email, ip) {
     await db.prepare('INSERT INTO emails (email, last_ip) VALUES (?, ?)')
       .bind(emailNorm, ip).run();
   }
-  console.log(`[worker] D1 email upsert: ${emailNorm}`);
 }
 
 async function logUsage(db, email, endpoint, provider, ip, imageKey, usage) {
   await db.prepare(
     'INSERT INTO usage_log (email, endpoint, provider, ip, image_key, input_tokens, output_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).bind(
-    email.toLowerCase().trim(),
-    endpoint,
-    provider || '',
-    ip,
-    imageKey || '',
-    usage?.inputTokens || 0,
-    usage?.outputTokens || 0,
+    normalizeEmail(email), endpoint, provider || '', ip, imageKey || '',
+    usage?.inputTokens || 0, usage?.outputTokens || 0,
   ).run();
 }
 
 async function saveDesignTokens(db, email, imageKey, tokensJson, annotationsJson, holisticJson, provider) {
-  const result = await db.prepare(
+  await db.prepare(
     'INSERT INTO design_tokens (email, image_key, tokens_json, annotations_json, holistic_json, provider) VALUES (?, ?, ?, ?, ?, ?)'
   ).bind(
-    email.toLowerCase().trim(),
-    imageKey || '',
+    normalizeEmail(email), imageKey || '',
     typeof tokensJson === 'string' ? tokensJson : JSON.stringify(tokensJson),
     typeof annotationsJson === 'string' ? annotationsJson : JSON.stringify(annotationsJson),
     typeof holisticJson === 'string' ? holisticJson : JSON.stringify(holisticJson),
     provider || '',
   ).run();
-  return result;
+}
+
+// ─── Body Size Check ───
+
+function checkBodySize(request, headers) {
+  const contentLength = parseInt(request.headers.get('content-length') || '0');
+  if (contentLength > MAX_BODY_SIZE) {
+    return new Response(
+      JSON.stringify({ error: 'payload_too_large', message: `Body exceeds ${MAX_BODY_SIZE / 1024 / 1024}MB limit` }),
+      { status: 413, headers }
+    );
+  }
+  return null;
 }
 
 // ─── Worker Entry ───
 
 export default {
   async fetch(request, env) {
+    const headers = corsHeaders(request);
+
     // CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
-          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Origin': getCorsOrigin(request),
           'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Headers': 'Content-Type, X-Session-Token',
           'Access-Control-Max-Age': '86400',
         },
       });
     }
 
     const url = new URL(request.url);
-    const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
 
-    // Health check
+    // Health check (minimal info in production)
     if (url.pathname === '/health') {
-      const providers = [];
-      if (env.ANTHROPIC_API_KEY) providers.push('claude-haiku', 'claude-sonnet');
-      if (env.OPENAI_API_KEY) providers.push('gpt4o-mini', 'gpt4o');
-      if (env.GEMINI_API_KEY) providers.push('gemini-flash');
-      return new Response(JSON.stringify({
-        status: 'ok',
-        dailyLimit: DAILY_LIMIT,
-        providers,
-        storage: {
-          d1: !!env.DB,
-          r2: !!env.IMAGES,
-          kv: !!env.RATE_LIMIT,
-        },
-      }), { headers: corsHeaders });
+      return new Response(JSON.stringify({ status: 'ok' }), { headers });
     }
 
     // Rate limit status
@@ -336,151 +392,180 @@ export default {
       const today = todayKey();
       const data = await env.RATE_LIMIT.get(`daily:ip:${ip}:${today}`, 'json');
       const used = data?.count || 0;
-      return new Response(JSON.stringify({ remaining: Math.max(0, DAILY_LIMIT - used), limit: DAILY_LIMIT, used }), { headers: corsHeaders });
+      return new Response(JSON.stringify({ remaining: Math.max(0, DAILY_LIMIT - used), limit: DAILY_LIMIT, used }), { headers });
     }
 
-    // ─── Upload Image to R2 ───
+    // ─── Upload Image to R2 (entry point — issues session token) ───
     if (url.pathname === '/api/upload-image' && request.method === 'POST') {
+      const sizeErr = checkBodySize(request, headers);
+      if (sizeErr) return sizeErr;
+
       let body;
       try { body = await request.json(); } catch {
-        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
       }
 
       const { image_base64: imageBase64, email, turnstile_token: turnstileToken } = body;
       if (!email || !isValidEmail(email)) {
-        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers });
       }
       if (!imageBase64) {
-        return new Response(JSON.stringify({ error: 'missing_image' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'missing_image' }), { status: 400, headers });
       }
+
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
 
       // Turnstile bot verification
-      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
       const turnstileOk = await verifyTurnstile(env, turnstileToken, ip);
       if (!turnstileOk) {
-        return new Response(JSON.stringify({ error: 'turnstile_failed', message: 'Human verification failed' }), { status: 403, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'turnstile_failed', message: 'Human verification failed' }), { status: 403, headers });
       }
 
-      // Check size (base64 is ~4/3 of original)
+      // Check image size
       const estimatedBytes = Math.ceil(imageBase64.length * 3 / 4);
       if (estimatedBytes > MAX_IMAGE_SIZE) {
         return new Response(JSON.stringify({
           error: 'image_too_large',
-          message: `Image exceeds ${MAX_IMAGE_SIZE / 1024 / 1024}MB limit (got ${(estimatedBytes / 1024 / 1024).toFixed(1)}MB)`,
+          message: `Image exceeds ${MAX_IMAGE_SIZE / 1024 / 1024}MB limit`,
           maxSize: MAX_IMAGE_SIZE,
-        }), { status: 413, headers: corsHeaders });
+        }), { status: 413, headers });
       }
 
-      // Rate limit check — each upload = 1 daily use
-      const rateResult = await checkAndIncrementRate(env, ip, email, corsHeaders);
+      // Rate limit (5/day for uploads)
+      const rateResult = await checkAndIncrementRate(env, ip, email, headers, DAILY_LIMIT, 'daily');
       if (rateResult.error) return rateResult.response;
 
       const mediaType = detectMediaType(imageBase64);
       const ext = mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/webp' ? 'webp' : 'png';
-      const imageKey = `${email.toLowerCase().trim()}/${Date.now()}.${ext}`;
+      const imageKey = `${normalizeEmail(email)}/${Date.now()}.${ext}`;
 
       try {
-        // Decode base64 and upload to R2
         const binaryData = Uint8Array.from(atob(imageBase64), c => c.charCodeAt(0));
         await env.IMAGES.put(imageKey, binaryData, {
           httpMetadata: { contentType: mediaType },
-          customMetadata: { email: email.toLowerCase().trim(), uploadedAt: new Date().toISOString(), ip },
+          customMetadata: { uploadedAt: new Date().toISOString() },
         });
 
-        // Log to D1
         if (env.DB) {
           await upsertEmail(env.DB, email, ip);
           await logUsage(env.DB, email, 'upload-image', '', ip, imageKey, {});
         }
+
+        // Issue session token
+        const sessionToken = await signSession(env, email, ip);
 
         console.log(`[worker] R2 upload: ${imageKey} (${(estimatedBytes / 1024).toFixed(0)} KB)`);
         return new Response(JSON.stringify({
           imageKey,
           size: estimatedBytes,
           mediaType,
+          sessionToken,
           rateLimit: { remaining: rateResult.remaining, limit: DAILY_LIMIT },
-        }), { headers: corsHeaders });
+        }), { headers });
       } catch (err) {
         console.error(`[worker] R2 upload error:`, err.message);
-        return new Response(JSON.stringify({ error: 'upload_failed', message: err.message }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'upload_failed', message: err.message }), { status: 500, headers });
       }
     }
 
-    // ─── Save Design Result to D1 ───
+    // ─── Save Design Result to D1 (session token required) ───
     if (url.pathname === '/api/save-result' && request.method === 'POST') {
+      const sizeErr = checkBodySize(request, headers);
+      if (sizeErr) return sizeErr;
+
       let body;
       try { body = await request.json(); } catch {
-        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
       }
 
-      const { email, image_key: imageKey, tokens, annotations, holistic, provider } = body;
+      const { email, image_key: imageKey, tokens, annotations, holistic, provider, session_token: sessionToken } = body;
       if (!email || !isValidEmail(email)) {
-        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers: corsHeaders });
-      }
-      if (!tokens) {
-        return new Response(JSON.stringify({ error: 'missing_tokens' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers });
       }
 
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const validSession = await verifySession(env, sessionToken, email, ip);
+      if (!validSession) {
+        return new Response(JSON.stringify({ error: 'invalid_session', message: 'Session expired or invalid' }), { status: 401, headers });
+      }
+
+      if (!tokens) {
+        return new Response(JSON.stringify({ error: 'missing_tokens' }), { status: 400, headers });
+      }
       if (!env.DB) {
-        return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+      }
+
+      // Limit payload size for tokens/annotations
+      const tokensStr = typeof tokens === 'string' ? tokens : JSON.stringify(tokens);
+      if (tokensStr.length > 500000) {
+        return new Response(JSON.stringify({ error: 'payload_too_large', message: 'Tokens JSON too large' }), { status: 413, headers });
       }
 
       try {
-        const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
         await upsertEmail(env.DB, email, ip);
         await saveDesignTokens(env.DB, email, imageKey, tokens, annotations || [], holistic || {}, provider);
         await logUsage(env.DB, email, 'save-result', provider || '', ip, imageKey || '', {});
-
-        console.log(`[worker] D1 saved design tokens for ${email}`);
-        return new Response(JSON.stringify({ saved: true }), { headers: corsHeaders });
+        return new Response(JSON.stringify({ saved: true }), { headers });
       } catch (err) {
         console.error(`[worker] D1 save error:`, err.message);
-        return new Response(JSON.stringify({ error: 'save_failed', message: err.message }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'save_failed' }), { status: 500, headers });
       }
     }
 
-    // ─── Get User History from D1 ───
+    // ─── Get User History from D1 (session token required) ───
     if (url.pathname === '/api/history' && request.method === 'GET') {
       const email = url.searchParams.get('email');
+      const sessionToken = url.searchParams.get('session_token');
       if (!email || !isValidEmail(email)) {
-        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers });
+      }
+
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const validSession = await verifySession(env, sessionToken, email, ip);
+      if (!validSession) {
+        return new Response(JSON.stringify({ error: 'invalid_session', message: 'Session expired or invalid' }), { status: 401, headers });
       }
 
       if (!env.DB) {
-        return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
       }
 
       try {
         const rows = await env.DB.prepare(
           'SELECT id, image_key, tokens_json, annotations_json, holistic_json, provider, created_at FROM design_tokens WHERE email = ? ORDER BY created_at DESC LIMIT 20'
-        ).bind(email.toLowerCase().trim()).all();
-
-        return new Response(JSON.stringify({ results: rows.results || [] }), { headers: corsHeaders });
+        ).bind(normalizeEmail(email)).all();
+        return new Response(JSON.stringify({ results: rows.results || [] }), { headers });
       } catch (err) {
-        return new Response(JSON.stringify({ error: 'query_failed', message: err.message }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'query_failed' }), { status: 500, headers });
       }
     }
 
-    // ─── Main Design System Analysis ───
+    // ─── Main Design System Analysis (session token required) ───
     if (url.pathname === '/api/analyze' && request.method === 'POST') {
+      const sizeErr = checkBodySize(request, headers);
+      if (sizeErr) return sizeErr;
+
       let body;
       try { body = await request.json(); } catch {
-        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
       }
 
-      const { image_base64: imageBase64, email, provider: reqProvider } = body;
+      const { image_base64: imageBase64, email, provider: reqProvider, session_token: sessionToken } = body;
       if (!email || !isValidEmail(email)) {
-        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers: corsHeaders });
-      }
-      if (!imageBase64) {
-        return new Response(JSON.stringify({ error: 'missing_image' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers });
       }
 
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      const rateResult = await checkAndIncrementRate(env, ip, email, corsHeaders);
-      if (rateResult.error) return rateResult.response;
+      const validSession = await verifySession(env, sessionToken, email, ip);
+      if (!validSession) {
+        return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+      }
 
-      // Log to D1
+      if (!imageBase64) {
+        return new Response(JSON.stringify({ error: 'missing_image' }), { status: 400, headers });
+      }
+
       if (env.DB) {
         await upsertEmail(env.DB, email, ip);
       }
@@ -499,50 +584,57 @@ Only return valid JSON, no markdown.`;
 
       try {
         const aiResult = await callProvider(env, providerKey, imageBase64, prompt, 4096);
-
-        // Log usage to D1
         if (env.DB) {
           await logUsage(env.DB, email, 'analyze', providerKey, ip, '', aiResult.usage);
         }
-
         return new Response(JSON.stringify({
           result: aiResult.result,
           parsed: aiResult.parsed,
           usage: aiResult.usage,
           provider: providerKey,
-          rateLimit: { remaining: rateResult.remaining, limit: DAILY_LIMIT },
-        }), { headers: corsHeaders });
+        }), { headers });
       } catch (err) {
-        return new Response(JSON.stringify({ error: 'api_error', message: err.message, provider: providerKey }), { status: 502, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'api_error', message: err.message }), { status: 502, headers });
       }
     }
 
-    // ─── Annotation Component Analysis ───
+    // ─── Annotation Component Analysis (session token + rate limit) ───
     if (url.pathname === '/api/analyze-component' && request.method === 'POST') {
+      const sizeErr = checkBodySize(request, headers);
+      if (sizeErr) return sizeErr;
+
       let body;
       try { body = await request.json(); } catch {
-        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
       }
 
-      const { image_base64: imageBase64, email, prompt: customPrompt, componentType, provider: reqProvider } = body;
+      const { image_base64: imageBase64, email, prompt: customPrompt, componentType, provider: reqProvider, session_token: sessionToken } = body;
       if (!email || !isValidEmail(email)) {
-        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers: corsHeaders });
-      }
-      if (!imageBase64) {
-        return new Response(JSON.stringify({ error: 'missing_image' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers });
       }
 
-      // Annotation analysis does NOT count against the main daily limit
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const validSession = await verifySession(env, sessionToken, email, ip);
+      if (!validSession) {
+        return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+      }
 
-      // Log to D1
+      if (!imageBase64) {
+        return new Response(JSON.stringify({ error: 'missing_image' }), { status: 400, headers });
+      }
+
+      // Component analysis rate limit (10/day per IP)
+      const compRate = await checkAndIncrementRate(env, ip, email, headers, COMPONENT_DAILY_LIMIT, 'comp');
+      if (compRate.error) return compRate.response;
+
       if (env.DB) {
         await upsertEmail(env.DB, email, ip);
       }
 
       const providerKey = resolveProvider(reqProvider, env);
 
-      const prompt = customPrompt || `Analyze this cropped UI element (type: ${componentType || 'unknown'}). Return ONLY valid JSON:
+      // Server-controlled prompt only — ignore customPrompt for security
+      const prompt = `Analyze this cropped UI element (type: ${componentType || 'unknown'}). Return ONLY valid JSON:
 {
   "elementType": "${componentType || 'unknown'}",
   "css": {
@@ -562,37 +654,23 @@ Only return valid JSON, no markdown.`;
 
       try {
         const aiResult = await callProvider(env, providerKey, imageBase64, prompt, 1024);
-
-        // Log usage to D1
         if (env.DB) {
           await logUsage(env.DB, email, 'analyze-component', providerKey, ip, '', aiResult.usage);
         }
-
         return new Response(JSON.stringify({
           result: aiResult.result,
           parsed: aiResult.parsed,
           usage: aiResult.usage,
           provider: providerKey,
-        }), { headers: corsHeaders });
+        }), { headers });
       } catch (err) {
-        return new Response(JSON.stringify({ error: 'api_error', message: err.message, provider: providerKey }), { status: 502, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'api_error', message: err.message }), { status: 502, headers });
       }
     }
 
     return new Response(
-      JSON.stringify({
-        error: 'not_found',
-        endpoints: [
-          '/api/analyze',
-          '/api/analyze-component',
-          '/api/upload-image',
-          '/api/save-result',
-          '/api/history',
-          '/api/rate-status',
-          '/health',
-        ],
-      }),
-      { status: 404, headers: corsHeaders }
+      JSON.stringify({ error: 'not_found' }),
+      { status: 404, headers }
     );
   },
 };

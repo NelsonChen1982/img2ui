@@ -660,10 +660,12 @@ async function fallbackIndividualAnalysis(
   callAI,
   getDevKeys,
   getStoredEmail,
-  onResult
+  onResult,
+  getSessionToken
 ) {
   const apiBase = window.PIC2UI_API_BASE || '';
   const dev = getDevKeys();
+  const sessionToken = getSessionToken?.() || '';
   for (let i = 0; i < groupAnnos.length; i++) {
     const a = groupAnnos[i];
     if (onProgress) onProgress(startIdx + i, total, a.label, a.typeId);
@@ -683,6 +685,7 @@ async function fallbackIndividualAnalysis(
             prompt,
             email: emailToSend,
             provider: window.selectedProvider,
+            session_token: sessionToken,
           }),
         });
         console.log(`[img2ui] 📥 Worker response (individual): status=${resp.status}`)
@@ -747,6 +750,7 @@ export async function analyzeAnnotationsWithAI(context) {
     onResult,
     getDevKeys,
     getStoredEmail,
+    getSessionToken,
     COMP_META,
     COMP_SKELETON,
     VARIATION_AXIS,
@@ -759,6 +763,7 @@ export async function analyzeAnnotationsWithAI(context) {
 
   const apiBase = window.PIC2UI_API_BASE || '';
   const email = getStoredEmail?.() || '';
+  const sessionToken = getSessionToken?.() || '';
   const dev = getDevKeys?.() || {};
   const hasDirectKey = dev.anthropic || dev.openai || dev.gemini;
   const analysisLog = [];
@@ -779,6 +784,7 @@ export async function analyzeAnnotationsWithAI(context) {
           prompt,
           email,
           provider: window.selectedProvider,
+          session_token: sessionToken,
         }),
       });
       console.log(`[img2ui] 📥 Worker response (grouped): status=${resp.status}`)
@@ -948,7 +954,8 @@ export async function analyzeAnnotationsWithAI(context) {
           callAI,
           getDevKeys,
           getStoredEmail,
-          onResult
+          onResult,
+          getSessionToken
         );
         progressIdx += groupAnnos.length;
       }
@@ -965,7 +972,8 @@ export async function analyzeAnnotationsWithAI(context) {
         callAI,
         getDevKeys,
         getStoredEmail,
-        onResult
+        onResult,
+        getSessionToken
       );
       progressIdx += groupAnnos.length;
     }
@@ -1122,6 +1130,7 @@ export async function analyzeHolisticDesign(context) {
     imageBase64,
     getDevKeys,
     getStoredEmail,
+    getSessionToken,
     knownComponentIds,
     onResult,
   } = context;
@@ -1154,6 +1163,7 @@ export async function analyzeHolisticDesign(context) {
           prompt,
           email: getStoredEmail?.() || '',
           provider: window.selectedProvider,
+          session_token: getSessionToken?.() || '',
         }),
       });
       console.log(`[img2ui] 📥 Worker response (holistic): status=${resp.status}`)

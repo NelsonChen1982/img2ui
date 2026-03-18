@@ -120,6 +120,7 @@ async function startProcessing() {
             gemini: settingsStore.devSettings?.gemini || '',
           }),
           getStoredEmail: () => settingsStore.email || '',
+          getSessionToken: () => pipelineStore.sessionToken || '',
           COMP_META,
           COMP_SKELETON,
           VARIATION_AXIS,
@@ -144,6 +145,7 @@ async function startProcessing() {
           gemini: settingsStore.devSettings?.gemini || '',
         }),
         getStoredEmail: () => settingsStore.email || '',
+        getSessionToken: () => pipelineStore.sessionToken || '',
         knownComponentIds: ALL_COMP_IDS,
         onResult: (entry) => {
           analysisResults.value = [...analysisResults.value, entry]
@@ -178,6 +180,7 @@ async function startProcessing() {
             annotations: pipelineStore.annotations,
             holistic: pipelineStore.holisticResult,
             provider: window.selectedProvider || '',
+            session_token: pipelineStore.sessionToken || '',
           }),
         })
         const data = await resp.json()

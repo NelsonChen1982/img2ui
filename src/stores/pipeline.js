@@ -36,6 +36,7 @@ export const usePipelineStore = defineStore('pipeline', () => {
   const detectedFonts = ref([]); // Fonts detected from image via AI
   const holisticResult = ref(null); // Holistic design analysis from AI
   const imageKey = ref(''); // R2 image key after upload
+  const sessionToken = ref(''); // Session token from worker (issued on upload)
 
   /**
    * Navigate to a specific step
@@ -105,6 +106,7 @@ export const usePipelineStore = defineStore('pipeline', () => {
     colorSlots.value = {};
     analysisLog.value = [];
     imageKey.value = '';
+    sessionToken.value = '';
   }
 
   /**
@@ -394,6 +396,7 @@ export const usePipelineStore = defineStore('pipeline', () => {
     detectedFonts,
     holisticResult,
     imageKey,
+    sessionToken,
     uploadedImage,
 
     // Actions

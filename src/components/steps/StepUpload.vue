@@ -151,6 +151,10 @@ async function handleNext() {
           pipelineStore.imageKey = data.imageKey
           console.log('[img2ui] R2 upload OK:', data.imageKey)
         }
+        if (data.sessionToken) {
+          pipelineStore.sessionToken = data.sessionToken
+          console.log('[img2ui] Session token received')
+        }
         if (data.rateLimit) {
           settingsStore.rateLimitRemaining = data.rateLimit.remaining
         }
