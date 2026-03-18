@@ -19,6 +19,7 @@ const settingsStore = useSettingsStore()
 const rateLimitStore = useRateLimitStore()
 
 const currentStep = computed(() => pipelineStore.step)
+const isDev = import.meta.env.DEV
 
 // CSS Framework options
 const cssFrameworks = [
@@ -33,6 +34,19 @@ const languages = [
   { value: 'en', label: 'English' },
   { value: 'ja', label: '日本語' }
 ]
+
+// AI Model options
+const models = [
+  { value: 'gpt4o-mini', label: 'GPT-4o Mini' },
+  { value: 'gpt4o', label: 'GPT-4o' },
+  { value: 'gpt-5.4', label: 'GPT-5.4' },
+  { value: 'claude-sonnet', label: 'Claude Sonnet 4' },
+]
+
+const modelLabel = computed(() => {
+  const m = settingsStore.selectedProvider
+  return models.find(x => x.value === m)?.label || m
+})
 
 // Initialize stores on mount
 onMounted(async () => {
@@ -64,6 +78,10 @@ function handleCSSFrameworkChange(value) {
 function handleLanguageChange(value) {
   settingsStore.setLang(value)
 }
+
+function handleModelChange(value) {
+  settingsStore.setProvider(value)
+}
 </script>
 
 <template>
@@ -86,6 +104,19 @@ function handleLanguageChange(value) {
           <template #trigger>
             <i class="fa-duotone fa-thin fa-code" style="font-size:11px;"></i>
             <span style="font-size:10px;">{{ settingsStore.selectedCSSFramework === 'tailwind' ? 'Tailwind' : settingsStore.selectedCSSFramework }}</span>
+          </template>
+        </DropdownMenu>
+
+        <!-- Model dropdown (dev only) -->
+        <DropdownMenu
+          v-if="isDev"
+          :items="models"
+          :model-value="settingsStore.selectedProvider"
+          @update:model-value="handleModelChange"
+        >
+          <template #trigger>
+            <i class="fa-duotone fa-thin fa-microchip" style="font-size:11px;"></i>
+            <span style="font-size:10px;">{{ modelLabel }}</span>
           </template>
         </DropdownMenu>
 

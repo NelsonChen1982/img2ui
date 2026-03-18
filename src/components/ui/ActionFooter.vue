@@ -23,8 +23,8 @@ function t(obj) {
 
 const currentStep = computed(() => pipelineStore.step)
 
-// Footer visibility - hidden on steps 1, 2, 6
-const isFooterVisible = computed(() => ![1, 2, 6].includes(currentStep.value))
+// Footer visibility - hidden on steps 1, 6
+const isFooterVisible = computed(() => ![1, 6].includes(currentStep.value))
 
 // Back button text
 const backButtonText = computed(() => t(I.back))
@@ -137,7 +137,7 @@ function handleDownloadHTML() {
 
       <div class="af-center">{{ centerText }}</div>
 
-      <div class="af-right">
+      <div class="af-right" v-if="currentStep !== 2">
         <span>
           <button v-if="showStep5Controls && !isMobile" class="af-btn-secondary" @click="handleSkip">
             {{ t(I.s5.skip) }}

@@ -75,11 +75,8 @@ async function startProcessing() {
     }, delay)
   })
 
-  // Analyze annotations with AI — build proper context object
   // Set globals that aiService.js reads (legacy compatibility)
-  // Resolve 'auto' to the cheapest available provider based on dev keys
-  // Default to gpt4o-mini via worker
-  window.selectedProvider = 'gpt4o-mini'
+  window.selectedProvider = settingsStore.selectedProvider || 'gpt4o-mini'
   window.PIC2UI_API_BASE = import.meta.env.VITE_API_BASE || settingsStore.devSettings?.base || ''
 
   // ── Debug: email & worker connection ──
@@ -170,9 +167,11 @@ async function startProcessing() {
     const apiBase = window.PIC2UI_API_BASE || ''
     if (apiBase && settingsStore.email) {
       try {
+        const saveHdrs = { 'Content-Type': 'application/json' }
+        if (import.meta.env.DEV && import.meta.env.VITE_DEV_BYPASS_KEY) saveHdrs['x-dev-key'] = import.meta.env.VITE_DEV_BYPASS_KEY
         const resp = await fetch(`${apiBase}/api/save-result`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: saveHdrs,
           body: JSON.stringify({
             email: settingsStore.email,
             image_key: pipelineStore.imageKey || '',

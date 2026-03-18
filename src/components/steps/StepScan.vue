@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
 import { I } from '../../data/i18n'
@@ -52,11 +52,12 @@ function startAnalysis() {
   timers.value.push(finalId)
 }
 
-function handleBack() {
+function clearTimers() {
   timers.value.forEach(id => clearTimeout(id))
   timers.value = []
-  pipelineStore.prevStep()
 }
+
+onUnmounted(clearTimers)
 
 function completeTask(index) {
   if (index >= 0 && index < tasks.value.length) {
@@ -68,27 +69,6 @@ function completeTask(index) {
 
 <template>
   <div style="max-width: 760px; margin: 0 auto">
-    <button
-      @click="handleBack"
-      style="
-        margin-bottom: 16px;
-        padding: 6px 14px;
-        border-radius: 8px;
-        border: 1px solid #e0e0e0;
-        background: #fff;
-        color: #666;
-        font-size: 13px;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        transition: all 0.2s;
-      "
-    >
-      <i class="fa-duotone fa-thin fa-arrow-left" style="font-size: 12px"></i>
-      {{ t(I.back) }}
-    </button>
-
     <h1 style="font-size: 26px; font-weight: 700; color: #111; margin-bottom: 6px">
       {{ t(I.s2.title) }}
     </h1>

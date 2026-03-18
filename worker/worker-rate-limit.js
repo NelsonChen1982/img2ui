@@ -37,6 +37,14 @@ const ALLOWED_ORIGINS = [
   'http://localhost:4173',
 ];
 
+// ─── Dev Bypass ───
+// Set DEV_BYPASS_KEY secret in worker + VITE_DEV_BYPASS_KEY in .env
+// Requests with matching x-dev-key header skip Turnstile, rate limit, and session checks
+function isDevBypass(request, env) {
+  if (!env.DEV_BYPASS_KEY) return false;
+  return request.headers.get('x-dev-key') === env.DEV_BYPASS_KEY;
+}
+
 // ─── Provider Configs ───
 const PROVIDERS = {
   'claude-haiku': {
@@ -57,6 +65,11 @@ const PROVIDERS = {
   'gpt4o': {
     api: 'https://api.openai.com/v1/chat/completions',
     model: 'gpt-4o',
+    type: 'openai',
+  },
+  'gpt-5.4': {
+    api: 'https://api.openai.com/v1/chat/completions',
+    model: 'gpt-5.4',
     type: 'openai',
   },
   'gemini-flash': {
@@ -415,10 +428,13 @@ export default {
 
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
 
-      // Turnstile bot verification
-      const turnstileOk = await verifyTurnstile(env, turnstileToken, ip);
-      if (!turnstileOk) {
-        return new Response(JSON.stringify({ error: 'turnstile_failed', message: 'Human verification failed' }), { status: 403, headers });
+      // Turnstile bot verification (skip for dev bypass)
+      const devBypass = isDevBypass(request, env);
+      if (!devBypass) {
+        const turnstileOk = await verifyTurnstile(env, turnstileToken, ip);
+        if (!turnstileOk) {
+          return new Response(JSON.stringify({ error: 'turnstile_failed', message: 'Human verification failed' }), { status: 403, headers });
+        }
       }
 
       // Check image size
@@ -431,9 +447,12 @@ export default {
         }), { status: 413, headers });
       }
 
-      // Rate limit (5/day for uploads)
-      const rateResult = await checkAndIncrementRate(env, ip, email, headers, DAILY_LIMIT, 'daily');
-      if (rateResult.error) return rateResult.response;
+      // Rate limit (5/day for uploads, skip for dev bypass)
+      let rateResult = { remaining: DAILY_LIMIT };
+      if (!devBypass) {
+        rateResult = await checkAndIncrementRate(env, ip, email, headers, DAILY_LIMIT, 'daily');
+        if (rateResult.error) return rateResult.response;
+      }
 
       const mediaType = detectMediaType(imageBase64);
       const ext = mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/webp' ? 'webp' : 'png';
@@ -484,9 +503,11 @@ export default {
       }
 
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      const validSession = await verifySession(env, sessionToken, email, ip);
-      if (!validSession) {
-        return new Response(JSON.stringify({ error: 'invalid_session', message: 'Session expired or invalid' }), { status: 401, headers });
+      if (!isDevBypass(request, env)) {
+        const validSession = await verifySession(env, sessionToken, email, ip);
+        if (!validSession) {
+          return new Response(JSON.stringify({ error: 'invalid_session', message: 'Session expired or invalid' }), { status: 401, headers });
+        }
       }
 
       if (!tokens) {
@@ -522,9 +543,11 @@ export default {
       }
 
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      const validSession = await verifySession(env, sessionToken, email, ip);
-      if (!validSession) {
-        return new Response(JSON.stringify({ error: 'invalid_session', message: 'Session expired or invalid' }), { status: 401, headers });
+      if (!isDevBypass(request, env)) {
+        const validSession = await verifySession(env, sessionToken, email, ip);
+        if (!validSession) {
+          return new Response(JSON.stringify({ error: 'invalid_session', message: 'Session expired or invalid' }), { status: 401, headers });
+        }
       }
 
       if (!env.DB) {
@@ -557,9 +580,11 @@ export default {
       }
 
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      const validSession = await verifySession(env, sessionToken, email, ip);
-      if (!validSession) {
-        return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+      if (!isDevBypass(request, env)) {
+        const validSession = await verifySession(env, sessionToken, email, ip);
+        if (!validSession) {
+          return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+        }
       }
 
       if (!imageBase64) {
@@ -614,18 +639,24 @@ Only return valid JSON, no markdown.`;
       }
 
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      const validSession = await verifySession(env, sessionToken, email, ip);
-      if (!validSession) {
-        return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+      const devBypassAC = isDevBypass(request, env);
+
+      if (!devBypassAC) {
+        const validSession = await verifySession(env, sessionToken, email, ip);
+        if (!validSession) {
+          return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+        }
       }
 
       if (!imageBase64) {
         return new Response(JSON.stringify({ error: 'missing_image' }), { status: 400, headers });
       }
 
-      // Component analysis rate limit (10/day per IP)
-      const compRate = await checkAndIncrementRate(env, ip, email, headers, COMPONENT_DAILY_LIMIT, 'comp');
-      if (compRate.error) return compRate.response;
+      // Component analysis rate limit (10/day per IP, skip for dev bypass)
+      if (!devBypassAC) {
+        const compRate = await checkAndIncrementRate(env, ip, email, headers, COMPONENT_DAILY_LIMIT, 'comp');
+        if (compRate.error) return compRate.response;
+      }
 
       if (env.DB) {
         await upsertEmail(env.DB, email, ip);

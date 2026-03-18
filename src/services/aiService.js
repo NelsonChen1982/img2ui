@@ -5,6 +5,15 @@
 
 import { toHex, ha, isLight, hexToRgb } from './colorUtils.js';
 
+/** Build headers for worker API calls, with optional dev bypass key */
+function workerHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (import.meta.env.DEV && import.meta.env.VITE_DEV_BYPASS_KEY) {
+    h['x-dev-key'] = import.meta.env.VITE_DEV_BYPASS_KEY;
+  }
+  return h;
+}
+
 /**
  * Make a direct API call to an LLM provider (for local testing)
  * Supports Claude, OpenAI (GPT-4o), and Google Gemini
@@ -679,7 +688,7 @@ async function fallbackIndividualAnalysis(
         console.log(`[img2ui] 📤 Worker call (individual): email="${emailToSend}", provider="${window.selectedProvider}", annotation="${a.label}"`)
         const resp = await fetch(`${apiBase}/api/analyze-component`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: workerHeaders(),
           body: JSON.stringify({
             image_base64: base64,
             prompt,
@@ -778,7 +787,7 @@ export async function analyzeAnnotationsWithAI(context) {
       console.log(`[img2ui] 📤 Worker call (grouped): email="${email}", provider="${window.selectedProvider}"`)
       const resp = await fetch(`${apiBase}/api/analyze-component`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: workerHeaders(),
         body: JSON.stringify({
           image_base64: base64,
           prompt,
@@ -1157,7 +1166,7 @@ export async function analyzeHolisticDesign(context) {
       console.log(`[img2ui] 📤 Worker call (holistic): apiBase="${apiBase}", provider="${window.selectedProvider}"`)
       const resp = await fetch(`${apiBase}/api/analyze-component`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: workerHeaders(),
         body: JSON.stringify({
           image_base64: imageBase64,
           prompt,

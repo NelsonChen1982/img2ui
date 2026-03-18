@@ -131,9 +131,11 @@ async function handleNext() {
     const base64 = pipelineStore.uploadedImage.split(',')[1] || ''
     if (base64) {
       try {
+        const hdrs = { 'Content-Type': 'application/json' }
+        if (isDev && import.meta.env.VITE_DEV_BYPASS_KEY) hdrs['x-dev-key'] = import.meta.env.VITE_DEV_BYPASS_KEY
         const resp = await fetch(`${apiBase}/api/upload-image`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: hdrs,
           body: JSON.stringify({
             image_base64: base64,
             email: email.value,
