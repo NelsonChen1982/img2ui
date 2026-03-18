@@ -217,7 +217,7 @@ async function callOpenAI(env, providerKey, imageBase64, prompt, maxTokens) {
     },
     body: JSON.stringify({
       model: p.model,
-      max_tokens: maxTokens,
+      max_completion_tokens: maxTokens,
       messages: [{
         role: 'user',
         content: [
@@ -386,7 +386,7 @@ export default {
         headers: {
           'Access-Control-Allow-Origin': getCorsOrigin(request),
           'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, X-Session-Token',
+          'Access-Control-Allow-Headers': 'Content-Type, X-Session-Token, x-dev-key',
           'Access-Control-Max-Age': '86400',
         },
       });
@@ -664,8 +664,10 @@ Only return valid JSON, no markdown.`;
 
       const providerKey = resolveProvider(reqProvider, env);
 
-      // Server-controlled prompt only — ignore customPrompt for security
-      const prompt = `Analyze this cropped UI element (type: ${componentType || 'unknown'}). Return ONLY valid JSON:
+      // Use frontend-generated prompt if provided and reasonable length, otherwise fallback
+      const prompt = (customPrompt && customPrompt.length <= 4000)
+        ? customPrompt
+        : `Analyze this cropped UI element (type: ${componentType || 'unknown'}). Return ONLY valid JSON:
 {
   "elementType": "${componentType || 'unknown'}",
   "css": {

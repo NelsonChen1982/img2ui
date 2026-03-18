@@ -79,22 +79,24 @@ async function startProcessing() {
   window.selectedProvider = settingsStore.selectedProvider || 'gpt4o-mini'
   window.PIC2UI_API_BASE = import.meta.env.VITE_API_BASE || settingsStore.devSettings?.base || ''
 
-  // ── Debug: email & worker connection ──
-  const debugEmail = settingsStore.email || ''
-  const debugBase = window.PIC2UI_API_BASE || '(empty — will use direct API)'
-  console.log('[img2ui] 📧 Email in settings store:', debugEmail || '⚠️ EMPTY')
-  console.log('[img2ui] 🔗 Worker base URL:', debugBase)
+  // ── Debug: email & worker connection (dev only) ──
+  if (import.meta.env.DEV) {
+    const debugEmail = settingsStore.email || ''
+    const debugBase = window.PIC2UI_API_BASE || '(empty — will use direct API)'
+    console.log('[img2ui] 📧 Email in settings store:', debugEmail || '⚠️ EMPTY')
+    console.log('[img2ui] 🔗 Worker base URL:', debugBase)
 
-  if (window.PIC2UI_API_BASE) {
-    try {
-      const healthResp = await fetch(`${window.PIC2UI_API_BASE}/health`)
-      const healthData = await healthResp.json()
-      console.log('[img2ui] ✅ Worker /health response:', healthData)
-    } catch (err) {
-      console.error('[img2ui] ❌ Worker connection failed:', err.message)
+    if (window.PIC2UI_API_BASE) {
+      try {
+        const healthResp = await fetch(`${window.PIC2UI_API_BASE}/health`)
+        const healthData = await healthResp.json()
+        console.log('[img2ui] ✅ Worker /health response:', healthData)
+      } catch (err) {
+        console.error('[img2ui] ❌ Worker connection failed:', err.message)
+      }
+    } else {
+      console.warn('[img2ui] ⚠️ No PIC2UI_API_BASE set — worker will not be used')
     }
-  } else {
-    console.warn('[img2ui] ⚠️ No PIC2UI_API_BASE set — worker will not be used')
   }
 
   if (pipelineStore.annotations.length > 0) {
@@ -183,9 +185,9 @@ async function startProcessing() {
           }),
         })
         const data = await resp.json()
-        console.log('[img2ui] D1 save result:', data)
+        if (import.meta.env.DEV) console.log('[img2ui] D1 save result:', data)
       } catch (err) {
-        console.warn('[img2ui] D1 save failed (continuing):', err.message)
+        if (import.meta.env.DEV) console.warn('[img2ui] D1 save failed (continuing):', err.message)
       }
     }
 

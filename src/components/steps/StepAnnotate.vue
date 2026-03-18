@@ -243,7 +243,7 @@ function clearAnnotations() {
 </script>
 
 <template>
-  <div style="max-width: 1200px; margin: 0 auto">
+  <div style="max-width: 1200px; margin: 0 auto; padding-bottom: 80px">
     <div style="margin-bottom: 14px">
       <h1 style="font-size: 26px; font-weight: 700; color: #111">
         {{ t(I.s5.title) }}

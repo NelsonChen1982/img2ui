@@ -7,7 +7,8 @@ export const I = {
   },
   back: { zh:'上一步', en:'Back', ja:'戻る' },
   s1: {
-    title: { zh:'從任意圖片萃取 Design System', en:'Extract Design System from Any Image', ja:'あらゆる画像からデザインシステムを抽出' },
+    title: { zh:'圖片轉 UI 設計', en:'Image to UI Design', ja:'画像から UI デザインへ' },
+    subtitle: { zh:'預覽或交給 Coding Agent，都可以', en:'Preview it, or hand it to your Coding Agent', ja:'プレビューでも Coding Agent でもそのまま使える' },
     desc: {
       zh:'上傳任何圖片 — UI 截圖、設計稿、照片、插圖皆可。AI 自動萃取配色與元件風格，字體可自由選擇，產出可直接用於 coding agent 的 Design System 規範。',
       en:'Upload any image — UI screenshots, mockups, photos, illustrations. AI extracts colors and component styles; fonts are freely selectable. Outputs a Design System spec ready for coding agents.',

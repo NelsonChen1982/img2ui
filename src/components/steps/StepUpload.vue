@@ -154,17 +154,17 @@ async function handleNext() {
 
         if (data.imageKey) {
           pipelineStore.imageKey = data.imageKey
-          console.log('[img2ui] R2 upload OK:', data.imageKey)
+          if (isDev) console.log('[img2ui] R2 upload OK:', data.imageKey)
         }
         if (data.sessionToken) {
           pipelineStore.sessionToken = data.sessionToken
-          console.log('[img2ui] Session token received')
+          if (isDev) console.log('[img2ui] Session token received')
         }
         if (data.rateLimit) {
           settingsStore.rateLimitRemaining = data.rateLimit.remaining
         }
       } catch (err) {
-        console.warn('[img2ui] R2 upload failed (continuing):', err.message)
+        if (isDev) console.warn('[img2ui] R2 upload failed (continuing):', err.message)
         submitting.value = false
       }
     }
@@ -179,10 +179,13 @@ async function handleNext() {
     <!-- Intro Section -->
     <div style="text-align: center; margin-bottom: 40px; padding-top: 20px">
       <img :src="logoImg" alt="img2ui" style="width:96px;height:96px;border-radius:24px;margin:0 auto 20px;display:block;box-shadow:0 6px 24px rgba(0,0,0,.1);">
-      <h1 style="font-size: 34px; font-weight: 800; color: #111; margin-bottom: 12px; line-height: 1.2">
+      <h1 style="font-size: 40px; font-weight: 800; color: #111; margin-bottom: 8px; line-height: 1.2">
         {{ t(I.s1.title) }}
       </h1>
-      <p style="color: #777; font-size: 16px; line-height: 1.7; max-width: 540px; margin: 0 auto 28px">
+      <p style="color: #555; font-size: 17px; font-weight: 500; margin: 0 auto 8px; letter-spacing: 0.3px">
+        {{ t(I.s1.subtitle) }}
+      </p>
+      <p style="color: #999; font-size: 14px; line-height: 1.7; max-width: 540px; margin: 0 auto 28px">
         {{ t(I.s1.desc) }}
       </p>
 

@@ -5,6 +5,10 @@
 
 import { toHex, ha, isLight, hexToRgb } from './colorUtils.js';
 
+const __DEV__ = import.meta.env.DEV;
+const devLog = (...args) => { if (__DEV__) console.log(...args); };
+const devError = (...args) => { if (__DEV__) console.error(...args); };
+
 /** Build headers for worker API calls, with optional dev bypass key */
 function workerHeaders() {
   const h = { 'Content-Type': 'application/json' };
@@ -685,22 +689,24 @@ async function fallbackIndividualAnalysis(
         usedProvider = 'worker';
       if (apiBase) {
         const emailToSend = getStoredEmail();
-        console.log(`[img2ui] 📤 Worker call (individual): email="${emailToSend}", provider="${window.selectedProvider}", annotation="${a.label}"`)
+        devLog(`[img2ui] 📤 Worker call (individual): email="${emailToSend}", provider="${window.selectedProvider}", annotation="${a.label}"`)
         const resp = await fetch(`${apiBase}/api/analyze-component`, {
           method: 'POST',
           headers: workerHeaders(),
           body: JSON.stringify({
             image_base64: base64,
             prompt,
+            componentType: a.typeId,
             email: emailToSend,
             provider: window.selectedProvider,
             session_token: sessionToken,
           }),
         });
-        console.log(`[img2ui] 📥 Worker response (individual): status=${resp.status}`)
+        devLog(`[img2ui] 📥 Worker response (individual): status=${resp.status}`)
         if (resp.ok) {
           const data = await resp.json();
-          console.log('[img2ui] ✅ Worker parsed result:', { provider: data.provider, hasResult: !!data.parsed })
+          devLog('[img2ui] ✅ Worker parsed result:', { provider: data.provider, hasResult: !!data.parsed })
+          devLog('[img2ui] 🔍 Raw AI result (individual):', JSON.stringify(data.parsed || data.result, null, 2)?.slice(0, 2000))
           aiResult =
             data.parsed ||
             tryParseJSON(data.result?.content?.[0]?.text) ||
@@ -708,7 +714,7 @@ async function fallbackIndividualAnalysis(
           usedProvider = data.provider || usedProvider;
         } else {
           const errBody = await resp.text()
-          console.error('[img2ui] ❌ Worker error (individual):', errBody)
+          devError('[img2ui] ❌ Worker error (individual):', errBody)
         }
       } else if (dev.anthropic || dev.openai || dev.gemini) {
         const result = await directAPICall(base64, prompt, 1024, window.selectedProvider, dev);
@@ -777,32 +783,34 @@ export async function analyzeAnnotationsWithAI(context) {
   const hasDirectKey = dev.anthropic || dev.openai || dev.gemini;
   const analysisLog = [];
 
-  console.log(`[img2ui] 📧 Grouped analysis — email="${email}", apiBase="${apiBase || '(none)'}"`)
+  devLog(`[img2ui] 📧 Grouped analysis — email="${email}", apiBase="${apiBase || '(none)'}"`)
 
   // Helper: send image + prompt to AI
-  async function callAI(base64, prompt, maxTokens) {
+  async function callAI(base64, prompt, maxTokens, compType) {
     let aiResult,
       usedProvider = window.selectedProvider || 'worker';
     if (apiBase) {
-      console.log(`[img2ui] 📤 Worker call (grouped): email="${email}", provider="${window.selectedProvider}"`)
+      devLog(`[img2ui] 📤 Worker call (grouped): email="${email}", provider="${window.selectedProvider}"`)
       const resp = await fetch(`${apiBase}/api/analyze-component`, {
         method: 'POST',
         headers: workerHeaders(),
         body: JSON.stringify({
           image_base64: base64,
           prompt,
+          componentType: compType,
           email,
           provider: window.selectedProvider,
           session_token: sessionToken,
         }),
       });
-      console.log(`[img2ui] 📥 Worker response (grouped): status=${resp.status}`)
+      devLog(`[img2ui] 📥 Worker response (grouped): status=${resp.status}`)
       if (!resp.ok) {
         const errBody = await resp.text()
-        console.error('[img2ui] ❌ Worker error (grouped):', errBody)
+        devError('[img2ui] ❌ Worker error (grouped):', errBody)
         throw new Error(`Worker API error ${resp.status}`);
       }
       const data = await resp.json();
+      devLog('[img2ui] 🔍 Raw AI result (grouped):', JSON.stringify(data.parsed || data.result, null, 2)?.slice(0, 2000))
       aiResult =
         data.parsed ||
         tryParseJSON(data.result?.content?.[0]?.text) ||
@@ -831,11 +839,9 @@ export async function analyzeAnnotationsWithAI(context) {
   let progressIdx = 0;
   const totalAnnotations = annosWithImages.length;
 
-  // Step 2: Process each group
+  // Step 2: Process each group — always individual analysis per annotation
   for (const [typeId, groupAnnos] of Object.entries(groups)) {
-    // 2a: Single annotation → individual analysis (original flow)
-    if (groupAnnos.length === 1) {
-      const a = groupAnnos[0];
+    for (const a of groupAnnos) {
       if (onProgress) onProgress(progressIdx, totalAnnotations, a.label, a.typeId);
       progressIdx++;
 
@@ -849,7 +855,7 @@ export async function analyzeAnnotationsWithAI(context) {
       try {
         const base64 = cropAnnotationToBase64(canvas, a.x, a.y, a.w, a.h);
         const prompt = buildComponentPrompt(typeId, a.label, COMP_META, COMP_SKELETON);
-        const { aiResult, usedProvider } = await callAI(base64, prompt, 1024);
+        const { aiResult, usedProvider } = await callAI(base64, prompt, 1024, typeId);
         if (aiResult) {
           a.aiCSS = normalizeAIResult(aiResult);
           a._relationship = {
@@ -867,124 +873,17 @@ export async function analyzeAnnotationsWithAI(context) {
           if (onResult) onResult(entry);
         }
       } catch (e) {
-        console.warn('AI analysis error:', e);
+        if (__DEV__) console.warn('AI analysis error:', e);
         enhancedLocalAnalysis(a);
         const entry = { label: a.label, typeId, method: 'local', reason: e.message };
         analysisLog.push(entry);
         if (onResult) onResult(entry);
       }
-      continue;
     }
 
-    // 2b: Multiple annotations of same type → GROUPED COMPARISON
-    if (onProgress)
-      onProgress(progressIdx, totalAnnotations, `${groupAnnos[0].label} (×${groupAnnos.length})`, typeId);
-
-    if (!apiBase && !hasDirectKey) {
-      // No API → enhanced local analysis for each + local relationship inference
-      groupAnnos.forEach((a) => {
-        enhancedLocalAnalysis(a);
-        const entry = { label: a.label, typeId, method: 'local', reason: 'No API key' };
-        analysisLog.push(entry);
-        if (onResult) onResult(entry);
-      });
+    // Local relationship inference for multiple annotations of same type
+    if (groupAnnos.length > 1) {
       localGroupRelationship(groupAnnos, typeId, VARIATION_AXIS);
-      progressIdx += groupAnnos.length;
-      continue;
-    }
-
-    try {
-      // Composite all crops into one image
-      const compositeBase64 = compositeAnnotationCrops(canvas, groupAnnos);
-      const prompt = buildGroupedComparisonPrompt(
-        typeId,
-        groupAnnos[0].label,
-        groupAnnos.length,
-        COMP_META,
-        COMP_SKELETON,
-        VARIATION_AXIS
-      );
-      // Larger token budget for grouped analysis
-      const { aiResult, usedProvider } = await callAI(compositeBase64, prompt, 2048);
-
-      if (aiResult && aiResult.items && aiResult.items.length === groupAnnos.length) {
-        // Success: AI returned grouped analysis
-        const relationship = aiResult.relationship || 'variants';
-        const axis = aiResult.axis || VARIATION_AXIS?.[typeId]?.axis || 'variant';
-
-        groupAnnos.forEach((a, i) => {
-          const item = aiResult.items[i];
-          // Merge per-item CSS into annotation
-          const rawItem = { ...item };
-          delete rawItem.index;
-          delete rawItem.role;
-          delete rawItem.description;
-          a.aiCSS = normalizeAIResult(rawItem);
-          // Store relationship metadata
-          a._relationship = {
-            groupRelationship: relationship,
-            axis: axis,
-            role: item.role || `${relationship}-${i}`,
-            description: item.description || '',
-            confidence: aiResult.confidence || 0.7,
-            reasoning: aiResult.reasoning || '',
-          };
-          // Update the visual inferredVariant from AI
-          if (a.visual) {
-            a.visual.inferredVariant = item.role || a.visual.inferredVariant;
-          }
-          const entry = {
-            label: a.label,
-            typeId,
-            method: 'ai-grouped',
-            provider: usedProvider,
-            relationship,
-            role: item.role,
-          };
-          analysisLog.push(entry);
-          if (onResult) onResult(entry);
-        });
-        progressIdx += groupAnnos.length;
-        console.log(
-          `[Grouped] ${typeId} ×${groupAnnos.length}: ${relationship} (${axis}) — ${aiResult.reasoning}`
-        );
-      } else {
-        // AI returned something but items count mismatch → fallback to individual
-        console.warn(
-          `[Grouped] ${typeId}: item count mismatch, falling back to individual analysis`
-        );
-        await fallbackIndividualAnalysis(
-          groupAnnos,
-          canvas,
-          analysisLog,
-          onProgress,
-          progressIdx,
-          totalAnnotations,
-          callAI,
-          getDevKeys,
-          getStoredEmail,
-          onResult,
-          getSessionToken
-        );
-        progressIdx += groupAnnos.length;
-      }
-    } catch (e) {
-      console.warn(`[Grouped] ${typeId} error:`, e.message, '→ falling back');
-      // Fallback: try individual, then local
-      await fallbackIndividualAnalysis(
-        groupAnnos,
-        canvas,
-        analysisLog,
-        onProgress,
-        progressIdx,
-        totalAnnotations,
-        callAI,
-        getDevKeys,
-        getStoredEmail,
-        onResult,
-        getSessionToken
-      );
-      progressIdx += groupAnnos.length;
     }
   }
 
@@ -1043,14 +942,10 @@ export function normalizeAIResult(raw) {
 
     // Validate hex colors
     if (['backgroundColor', 'color', 'borderColor'].includes(normalized)) {
-      if (typeof v === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v)) {
-        out[normalized] = v;
-      } else if (typeof v === 'string' && v !== 'transparent' && v !== 'none' && v !== 'inherit') {
-        // Non-hex color string — keep but don't validate further
-        out[normalized] = v;
-      } else {
-        out[normalized] = v;
-      }
+      out[normalized] = v;
+      // Also keep skeleton-friendly aliases so compSkeleton render() can find them
+      if (normalized === 'backgroundColor') out.bgColor = v;
+      if (normalized === 'color') out.textColor = v;
       continue;
     }
 
@@ -1163,22 +1058,24 @@ export async function analyzeHolisticDesign(context) {
     let aiResult, usedProvider = window.selectedProvider || 'worker';
 
     if (apiBase) {
-      console.log(`[img2ui] 📤 Worker call (holistic): apiBase="${apiBase}", provider="${window.selectedProvider}"`)
+      devLog(`[img2ui] 📤 Worker call (holistic): apiBase="${apiBase}", provider="${window.selectedProvider}"`)
       const resp = await fetch(`${apiBase}/api/analyze-component`, {
         method: 'POST',
         headers: workerHeaders(),
         body: JSON.stringify({
           image_base64: imageBase64,
           prompt,
+          componentType: '_holistic',
           email: getStoredEmail?.() || '',
           provider: window.selectedProvider,
           session_token: getSessionToken?.() || '',
         }),
       });
-      console.log(`[img2ui] 📥 Worker response (holistic): status=${resp.status}`)
+      devLog(`[img2ui] 📥 Worker response (holistic): status=${resp.status}`)
       if (resp.ok) {
         const data = await resp.json();
-        console.log('[img2ui] ✅ Holistic result:', { provider: data.provider, hasResult: !!data.parsed })
+        devLog('[img2ui] ✅ Holistic result:', { provider: data.provider, hasResult: !!data.parsed })
+        devLog('[img2ui] 🔍 Raw AI result (holistic):', JSON.stringify(data.parsed || data.result, null, 2)?.slice(0, 2000))
         aiResult =
           data.parsed ||
           tryParseJSON(data.result?.content?.[0]?.text) ||
