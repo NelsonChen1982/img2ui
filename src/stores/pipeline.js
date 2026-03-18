@@ -37,6 +37,7 @@ export const usePipelineStore = defineStore('pipeline', () => {
   const holisticResult = ref(null); // Holistic design analysis from AI
   const imageKey = ref(''); // R2 image key after upload
   const sessionToken = ref(''); // Session token from worker (issued on upload)
+  const uiKitName = ref('img2ui UI Kit'); // Editable UI Kit name for cover hero
 
   /**
    * Navigate to a specific step
@@ -107,6 +108,7 @@ export const usePipelineStore = defineStore('pipeline', () => {
     analysisLog.value = [];
     imageKey.value = '';
     sessionToken.value = '';
+    uiKitName.value = 'img2ui UI Kit';
   }
 
   /**
@@ -397,6 +399,7 @@ export const usePipelineStore = defineStore('pipeline', () => {
     holisticResult,
     imageKey,
     sessionToken,
+    uiKitName,
     uploadedImage,
 
     // Actions
