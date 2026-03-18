@@ -1,9 +1,9 @@
 export const I = {
-  steps: { zh:['上傳圖片','AI 辨識','色彩微調','元件標注','產出中…','UI Kit'], en:['Upload','AI Scan','Color Tune','Annotate','Generating…','UI Kit'], ja:['アップロード','AI分析','色調整','注釈','生成中…','UIキット'] },
+  steps: { zh:['上傳圖片','AI 辨識','配色與字體','元件標注','產出中…','UI Kit'], en:['Upload','AI Scan','Colors & Fonts','Annotate','Generating…','UI Kit'], ja:['アップロード','AI分析','配色とフォント','注釈','生成中…','UIキット'] },
   titles: {
-    zh:{ 1:'上傳參考圖片',2:'AI 辨識設計語言…',3:'色彩微調',5:'元件標注（選填）',6:'正在產出 UI Kit…',7:'UI Kit' },
-    en:{ 1:'Upload Reference Image',2:'Analyzing Design Language…',3:'Color Tuning',5:'Component Annotation (Optional)',6:'Generating UI Kit…',7:'UI Kit' },
-    ja:{ 1:'参照画像をアップロード',2:'デザイン言語を分析中…',3:'色調整',5:'コンポーネント注釈（任意）',6:'UIキット生成中…',7:'UIキット' },
+    zh:{ 1:'上傳參考圖片',2:'AI 辨識設計語言…',3:'配色與字體',5:'元件標注（選填）',6:'正在產出 UI Kit…',7:'UI Kit' },
+    en:{ 1:'Upload Reference Image',2:'Analyzing Design Language…',3:'Colors & Fonts',5:'Component Annotation (Optional)',6:'Generating UI Kit…',7:'UI Kit' },
+    ja:{ 1:'参照画像をアップロード',2:'デザイン言語を分析中…',3:'配色とフォント',5:'コンポーネント注釈（任意）',6:'UIキット生成中…',7:'UIキット' },
   },
   back: { zh:'上一步', en:'Back', ja:'戻る' },
   s1: {
@@ -42,8 +42,8 @@ export const I = {
     },
   },
   s3: {
-    title: { zh:'色彩配置', en:'Color Configuration', ja:'カラー設定' },
-    desc: { zh:'上方是從圖片萃取的色盤，可點擊調色或新增。下方是語義色彩插槽，決定元件最終配色。', en:'Top: extracted palette — click to adjust or add colors. Bottom: semantic color slots that determine component styling.', ja:'上：抽出パレット — クリックで調整・追加。下：セマンティックカラースロット — コンポーネントの配色を決定。' },
+    title: { zh:'色彩配置與字體選擇', en:'Colors & Typography', ja:'カラー設定とフォント選択' },
+    desc: { zh:'選擇標題與內文字體，調整從圖片萃取的色盤，並設定語義色彩插槽來決定元件最終配色。', en:'Choose heading and body fonts, adjust the extracted color palette, and assign semantic color slots for component styling.', ja:'見出しと本文のフォントを選択し、抽出したカラーパレットを調整、セマンティックカラースロットでコンポーネントの配色を決定します。' },
     palette: { zh:'萃取色盤', en:'EXTRACTED PALETTE', ja:'抽出パレット' },
     addColor: { zh:'+ 新增顏色', en:'+ Add Color', ja:'+ 色を追加' },
     slots: { zh:'語義色彩插槽', en:'SEMANTIC COLOR SLOTS', ja:'セマンティックカラースロット' },
@@ -64,6 +64,7 @@ export const I = {
     skip: { zh:'略過', en:'Skip', ja:'スキップ' },
     next: { zh:'完成標注，產出 UI Kit', en:'Done, Generate UI Kit', ja:'注釈完了、UIキット生成' },
     none: { zh:'尚未標注', en:'No annotations yet', ja:'注釈なし' },
+    skipGenerate: { zh:'略過標注，產出 UI Kit', en:'Skip & Generate UI Kit', ja:'注釈をスキップしてUIキット生成' },
   },
   s6: {
     title: { zh:'正在產出 UI Kit…', en:'Generating UI Kit…', ja:'UIキット生成中…' },
@@ -89,14 +90,26 @@ export const I = {
   slotLabels: {
     primary:  { zh:'主色',   en:'Primary',   ja:'メイン' },
     secondary:{ zh:'副色',   en:'Secondary', ja:'サブ' },
-    accent:   { zh:'強調',   en:'Accent',    ja:'アクセント' },
+    accent:   { zh:'點綴色', en:'Accent',    ja:'アクセント' },
     success:  { zh:'成功',   en:'Success',   ja:'成功' },
     warning:  { zh:'警告',   en:'Warning',   ja:'警告' },
     danger:   { zh:'錯誤',   en:'Danger',    ja:'エラー' },
     info:     { zh:'資訊',   en:'Info',      ja:'情報' },
-    surface:  { zh:'表面',   en:'Surface',   ja:'表面' },
+    surface:  { zh:'底色',   en:'Surface',   ja:'背景色' },
     text:     { zh:'文字',   en:'Text',      ja:'テキスト' },
     border:   { zh:'邊框',   en:'Border',    ja:'ボーダー' },
+  },
+  slotHints: {
+    primary:  { zh:'按鈕、連結',       en:'Buttons, links',        ja:'ボタン・リンク' },
+    secondary:{ zh:'次要區塊',         en:'Sub-sections',          ja:'サブセクション' },
+    accent:   { zh:'徽章、高亮',       en:'Badges, highlights',    ja:'バッジ・ハイライト' },
+    success:  { zh:'確認、完成',       en:'Confirm, done',         ja:'確認・完了' },
+    warning:  { zh:'注意提示',         en:'Caution notices',       ja:'注意' },
+    danger:   { zh:'刪除、失敗',       en:'Delete, error',         ja:'削除・失敗' },
+    info:     { zh:'提示、說明',       en:'Tips, notes',           ja:'ヒント・説明' },
+    surface:  { zh:'卡片、區塊背景',   en:'Card backgrounds',      ja:'カード・セクション' },
+    text:     { zh:'內文預設色',       en:'Default body color',    ja:'本文デフォルト色' },
+    border:   { zh:'分隔線、外框',     en:'Dividers, outlines',    ja:'区切り線・枠線' },
   },
 };
 

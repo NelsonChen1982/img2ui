@@ -33,17 +33,19 @@ const isEmailValid = computed(() => {
   return emailRegex.test(email.value)
 })
 
-const isCtaDisabled = computed(() => !isEmailValid.value || !pipelineStore.uploadedImage || !turnstileToken.value)
+const isDev = import.meta.env.DEV
+const isCtaDisabled = computed(() => !isEmailValid.value || !pipelineStore.uploadedImage || (!isDev && !turnstileToken.value))
 
 // Render Turnstile widget when email becomes valid + image uploaded
 onMounted(() => {
   watch([isEmailValid, () => pipelineStore.uploadedImage], () => {
-    if (isEmailValid.value && pipelineStore.uploadedImage && !turnstileWidgetId.value) {
+    if (isEmailValid.value && pipelineStore.uploadedImage && !turnstileWidgetId.value && !isDev) {
       nextTick(() => {
         if (turnstileEl.value && window.turnstile) {
           turnstileWidgetId.value = window.turnstile.render(turnstileEl.value, {
             sitekey: TURNSTILE_SITE_KEY,
-            size: 'compact',
+            size: 'normal',
+            theme: 'light',
             callback: (token) => { turnstileToken.value = token },
             'expired-callback': () => { turnstileToken.value = '' },
             'error-callback': () => { turnstileToken.value = '' },
@@ -118,7 +120,7 @@ function validateEmailGate() {
 }
 
 async function handleNext() {
-  if (!isEmailValid.value || !pipelineStore.uploadedImage || !turnstileToken.value) return
+  if (!isEmailValid.value || !pipelineStore.uploadedImage || (!isDev && !turnstileToken.value)) return
   pipelineStore.setEmail(email.value)
 
   // Upload image to R2 + rate limit check + Turnstile verification
@@ -233,7 +235,7 @@ async function handleNext() {
         <img
           v-if="pipelineStore.uploadedImage"
           :src="pipelineStore.uploadedImage"
-          style="max-height: 280px; object-fit: contain; border-radius: 12px; margin: 0 auto; display: block"
+          style="max-height: 280px; max-width: 100%; object-fit: contain; border-radius: 12px; margin: 0 auto; display: block"
           alt="preview"
         />
         <div style="margin-top: 12px; font-size: 14px; color: #999">
@@ -305,7 +307,7 @@ async function handleNext() {
 
       <!-- Turnstile -->
       <div
-        v-show="isEmailValid && pipelineStore.uploadedImage"
+        v-show="!isDev && isEmailValid && pipelineStore.uploadedImage"
         ref="turnstileEl"
         style="margin-top: 12px; display: flex; justify-content: center;"
       ></div>

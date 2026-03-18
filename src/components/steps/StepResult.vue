@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
 import { I } from '../../data/i18n'
@@ -11,6 +11,12 @@ const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
 
 const copyLabel = ref('')
+const jsonExpanded = ref(false)
+const isMobile = ref(false)
+onMounted(() => {
+  isMobile.value = window.innerWidth <= 768
+  window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 768 })
+})
 
 function t(obj) {
   if (!obj) return ''
@@ -95,41 +101,50 @@ function copyJSON() {
     </div>
 
     <!-- Two-column layout: UI Kit + JSON Panel -->
-    <div style="display: flex; gap: 20px; align-items: flex-start">
-      <!-- Left: UI Kit Render -->
-      <div style="flex: 1; min-width: 0">
-        <div id="ui-kit-render" v-html="uiKitHTML" style="border-radius: 14px; overflow: hidden;" />
+    <div class="result-layout">
+      <!-- UI Kit Render -->
+      <div style="flex: 1; min-width: 0; max-width: 100%; order: 0;">
+        <div id="ui-kit-render" v-html="uiKitHTML" style="border-radius: 14px; overflow: hidden; max-width: 100%;" />
       </div>
 
-      <!-- Right: JSON Panel (Sticky) -->
+      <!-- JSON Panel -->
       <div
         id="json-panel"
-        style="
-          width: 380px;
-          flex-shrink: 0;
-          position: sticky;
-          top: 20px;
-          max-height: calc(100vh - 120px);
-          overflow-y: auto;
-        "
+        :style="isMobile ? {} : {
+          width: '380px',
+          flexShrink: 0,
+          position: 'sticky',
+          top: '20px',
+          maxHeight: 'calc(100vh - 120px)',
+          overflowY: 'auto',
+        }"
+        :class="{ 'json-panel-mobile': isMobile }"
       >
         <div style="background: #fafaf8; border: 1px solid #e8e8e8; border-radius: 14px; overflow: hidden">
+          <!-- JSON Header — always visible -->
           <div
             style="
               padding: 12px 16px;
-              border-bottom: 1px solid #e8e8e8;
               display: flex;
               justify-content: space-between;
               align-items: center;
               background: #fff;
+              cursor: pointer;
             "
+            :style="{ borderBottom: (!isMobile || jsonExpanded) ? '1px solid #e8e8e8' : 'none' }"
+            @click="isMobile && (jsonExpanded = !jsonExpanded)"
           >
-            <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #999">
-              <i class="fa-duotone fa-thin fa-code" style="margin-right: 4px;"></i>
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #999; display: flex; align-items: center; gap: 6px;">
+              <i class="fa-duotone fa-thin fa-code"></i>
               {{ t(I.s7.jsonLabel) }}
+              <i
+                v-if="isMobile"
+                class="fa-duotone fa-thin fa-chevron-down"
+                :style="{ fontSize: '9px', transition: 'transform 0.2s', transform: jsonExpanded ? 'rotate(180deg)' : 'none' }"
+              ></i>
             </span>
             <button
-              @click="copyJSON"
+              @click.stop="copyJSON"
               style="
                 padding: 3px 10px;
                 font-size: 11px;
@@ -145,7 +160,9 @@ function copyJSON() {
               {{ copyLabel || t(I.s7.copy) }}
             </button>
           </div>
+          <!-- JSON Body — collapsible on mobile -->
           <pre
+            v-show="!isMobile || jsonExpanded"
             class="json-pre"
             v-html="jsonHighlighted"
           ></pre>
@@ -156,6 +173,28 @@ function copyJSON() {
 </template>
 
 <style scoped>
+.result-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+  .result-layout {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .json-panel-mobile {
+    width: 100%;
+    order: -1;
+  }
+
+  .json-pre {
+    max-height: 300px !important;
+  }
+}
+
 button:hover {
   border-color: #999;
   background: #f5f5f5;

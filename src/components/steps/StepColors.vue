@@ -149,225 +149,13 @@ function pickSlotFromPalette(slotId, value) {
       {{ t(I.s3.desc) }}
     </p>
 
-    <!-- Palette Section -->
-    <div class="tok-card">
-      <div class="tok-label">{{ t(I.s3.palette) }}</div>
-      <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
-        <div
-          v-for="(color, idx) in pipelineStore.extractedColors"
-          :key="idx"
-          style="text-align: center; position: relative"
-        >
-          <div
-            class="color-chip"
-            :style="{
-              width: '72px',
-              height: '56px',
-              borderRadius: '10px',
-              background: color.hex,
-              border: '1px solid rgba(0, 0, 0, 0.08)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-            }"
-          >
-            <input
-              type="color"
-              :value="color.hex"
-              @change="(e) => updateColor(idx, e.target.value)"
-              style="
-                position: absolute;
-                inset: 0;
-                opacity: 0;
-                cursor: pointer;
-                border-radius: 10px;
-              "
-            />
-            <span
-              v-if="
-                SLOT_IDS.some((s) => pipelineStore.colorSlots[s] === color.hex)
-              "
-              :style="{
-                fontSize: '10px',
-                color: isLight(color.hex) ? '#333' : '#fff',
-                pointerEvents: 'none',
-                opacity: 0.7,
-              }"
-            >
-              {{
-                SLOT_IDS.filter((s) => pipelineStore.colorSlots[s] === color.hex)
-                  .map((s) => SLOT_ICONS[s])
-                  .join('')
-              }}
-            </span>
-          </div>
-          <div style="font-size: 10px; font-family: monospace; color: #999; margin-top: 4px">
-            {{ color.hex }}
-          </div>
-          <button
-            v-if="pipelineStore.extractedColors.length > 3"
-            @click="removeColor(idx)"
-            style="
-              position: absolute;
-              top: -5px;
-              right: -5px;
-              width: 16px;
-              height: 16px;
-              border-radius: 50%;
-              border: 1px solid #ddd;
-              background: #fff;
-              font-size: 9px;
-              color: #999;
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            "
-          >
-            <i class="fa-duotone fa-thin fa-xmark" style="font-size:8px;"></i>
-          </button>
-        </div>
-
-        <!-- Add Color Button -->
-        <div style="text-align: center">
-          <button
-            @click="addColor"
-            style="
-              width: 72px;
-              height: 56px;
-              border-radius: 10px;
-              border: 2px dashed #ddd;
-              background: #fafafa;
-              cursor: pointer;
-              font-size: 18px;
-              color: #bbb;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              transition: all 0.2s;
-            "
-          >
-            +
-          </button>
-          <div style="font-size: 10px; color: #bbb; margin-top: 4px">
-            {{ t(I.s3.addColor).replace('+ ', '') }}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Semantic Slots Section -->
-    <div class="tok-card">
-      <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px">
-        <div class="tok-label" style="margin-bottom: 0">{{ t(I.s3.slots) }}</div>
-        <span style="font-size: 11px; color: #bbb">{{ t(I.s3.slotsDesc) }}</span>
-      </div>
-      <div
-        style="
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-          gap: 10px;
-        "
-      >
-        <div
-          v-for="slotId in SLOT_IDS"
-          :key="slotId"
-          style="
-            border: 1px solid #e8e8e8;
-            border-radius: 10px;
-            padding: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            position: relative;
-          "
-        >
-          <div
-            class="color-chip"
-            :style="{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              background: pipelineStore.colorSlots[slotId] || '#ccc',
-              border: '1px solid rgba(0, 0, 0, 0.08)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              position: 'relative',
-            }"
-          >
-            <input
-              :data-slot="slotId"
-              type="color"
-              :value="pipelineStore.colorSlots[slotId] || '#ccc'"
-              @change="(e) => updateSlot(slotId, e.target.value)"
-              style="
-                position: absolute;
-                inset: 0;
-                opacity: 0;
-                cursor: pointer;
-                border-radius: 8px;
-              "
-            />
-            <span
-              :style="{
-                fontSize: '11px',
-                color: isLight(pipelineStore.colorSlots[slotId]) ? '#333' : '#fff',
-                pointerEvents: 'none',
-              }"
-            >
-              {{ SLOT_ICONS[slotId] }}
-            </span>
-          </div>
-          <div style="flex: 1; min-width: 0">
-            <div style="font-size: 12px; font-weight: 600; color: #333">
-              {{ t(I.slotLabels[slotId]) || slotId }}
-            </div>
-            <select
-              :value="pipelineStore.colorSlots[slotId] || ''"
-              @change="(e) => pickSlotFromPalette(slotId, e.target.value)"
-              style="
-                width: 100%;
-                font-size: 10px;
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                padding: 2px 4px;
-                margin-top: 3px;
-                background: #fff;
-                color: #666;
-              "
-            >
-              <option value="">
-                —
-                {{ t({ zh: '從色盤選擇', en: 'Pick from palette', ja: 'パレットから選択' }) }} —
-              </option>
-              <option
-                v-for="color in pipelineStore.extractedColors"
-                :key="color.hex"
-                :value="color.hex"
-                :selected="color.hex === pipelineStore.colorSlots[slotId]"
-              >
-                {{ color.hex }}
-              </option>
-              <option value="__custom__">✎ {{ t({ zh: '自訂', en: 'Custom', ja: 'カスタム' }) }}</option>
-            </select>
-          </div>
-          <div style="font-size: 9px; font-family: monospace; color: #bbb; position: absolute; top: 4px; right: 8px">
-            {{ pipelineStore.colorSlots[slotId] || '#ccc' }}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Font Settings Section -->
+    <!-- Font Settings Section (top) -->
     <div class="tok-card">
       <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px">
         <div class="tok-label" style="margin-bottom: 0">{{ t(I.s3.fonts) }}</div>
         <span style="font-size: 11px; color: #bbb">{{ t(I.s3.fontsDesc) }}</span>
       </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px">
+      <div class="font-grid">
         <!-- Heading Font -->
         <div style="border: 1px solid #e8e8e8; border-radius: 10px; padding: 14px">
           <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px">
@@ -475,6 +263,195 @@ function pickSlotFromPalette(slotId, value) {
         </div>
       </div>
     </div>
+
+    <!-- Palette Section -->
+    <div class="tok-card">
+      <div class="tok-label">{{ t(I.s3.palette) }}</div>
+      <div class="palette-grid">
+        <div
+          v-for="(color, idx) in pipelineStore.extractedColors"
+          :key="idx"
+          style="text-align: center; position: relative"
+        >
+          <div
+            class="color-chip palette-chip"
+            :style="{
+              background: color.hex,
+            }"
+          >
+            <input
+              type="color"
+              :value="color.hex"
+              @change="(e) => updateColor(idx, e.target.value)"
+              style="
+                position: absolute;
+                inset: 0;
+                opacity: 0;
+                cursor: pointer;
+                border-radius: 10px;
+              "
+            />
+            <span
+              v-if="color.ratio"
+              :style="{
+                fontSize: '10px',
+                color: isLight(color.hex) ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.65)',
+                pointerEvents: 'none',
+                fontWeight: 600,
+              }"
+            >
+              {{ Math.round(color.ratio * 100) }}%
+            </span>
+          </div>
+          <div style="font-size: 10px; font-family: monospace; color: #999; margin-top: 4px">
+            {{ color.hex }}
+          </div>
+          <button
+            v-if="pipelineStore.extractedColors.length > 3"
+            @click="removeColor(idx)"
+            style="
+              position: absolute;
+              top: -5px;
+              right: -5px;
+              width: 16px;
+              height: 16px;
+              border-radius: 50%;
+              border: 1px solid #ddd;
+              background: #fff;
+              font-size: 9px;
+              color: #999;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            "
+          >
+            <i class="fa-duotone fa-thin fa-xmark" style="font-size:8px;"></i>
+          </button>
+        </div>
+
+        <!-- Add Color Button -->
+        <div style="text-align: center">
+          <button
+            @click="addColor"
+            class="add-color-btn"
+          >
+            +
+          </button>
+          <div style="font-size: 10px; color: #bbb; margin-top: 4px">
+            {{ t(I.s3.addColor).replace('+ ', '') }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Semantic Slots Section -->
+    <div class="tok-card">
+      <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px">
+        <div class="tok-label" style="margin-bottom: 0">{{ t(I.s3.slots) }}</div>
+        <span style="font-size: 11px; color: #bbb">{{ t(I.s3.slotsDesc) }}</span>
+      </div>
+      <div
+        style="
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+          gap: 10px;
+        "
+      >
+        <div
+          v-for="slotId in SLOT_IDS"
+          :key="slotId"
+          style="
+            border: 1px solid #e8e8e8;
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: relative;
+          "
+        >
+          <div
+            class="color-chip"
+            :style="{
+              width: '36px',
+              height: '36px',
+              borderRadius: '8px',
+              background: pipelineStore.colorSlots[slotId] || '#ccc',
+              border: '1px solid rgba(0, 0, 0, 0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              position: 'relative',
+            }"
+          >
+            <input
+              :data-slot="slotId"
+              type="color"
+              :value="pipelineStore.colorSlots[slotId] || '#ccc'"
+              @change="(e) => updateSlot(slotId, e.target.value)"
+              style="
+                position: absolute;
+                inset: 0;
+                opacity: 0;
+                cursor: pointer;
+                border-radius: 8px;
+              "
+            />
+            <span
+              :style="{
+                fontSize: '11px',
+                color: isLight(pipelineStore.colorSlots[slotId]) ? '#333' : '#fff',
+                pointerEvents: 'none',
+              }"
+            >
+              {{ SLOT_ICONS[slotId] }}
+            </span>
+          </div>
+          <div style="flex: 1; min-width: 0">
+            <div style="font-size: 12px; font-weight: 600; color: #333">
+              {{ t(I.slotLabels[slotId]) || slotId }}
+            </div>
+            <div style="font-size: 10px; color: #bbb; line-height: 1.3;">
+              {{ t(I.slotHints[slotId]) }}
+            </div>
+            <select
+              :value="pipelineStore.colorSlots[slotId] || ''"
+              @change="(e) => pickSlotFromPalette(slotId, e.target.value)"
+              style="
+                width: 100%;
+                font-size: 10px;
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                padding: 2px 4px;
+                margin-top: 3px;
+                background: #fff;
+                color: #666;
+              "
+            >
+              <option value="">
+                —
+                {{ t({ zh: '從色盤選擇', en: 'Pick from palette', ja: 'パレットから選択' }) }} —
+              </option>
+              <option
+                v-for="color in pipelineStore.extractedColors"
+                :key="color.hex"
+                :value="color.hex"
+                :selected="color.hex === pipelineStore.colorSlots[slotId]"
+              >
+                {{ color.hex }}
+              </option>
+              <option value="__custom__">✎ {{ t({ zh: '自訂', en: 'Custom', ja: 'カスタム' }) }}</option>
+            </select>
+          </div>
+          <div style="font-size: 9px; font-family: monospace; color: #bbb; position: absolute; top: 4px; right: 8px">
+            {{ pipelineStore.colorSlots[slotId] || '#ccc' }}
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -503,5 +480,62 @@ function pickSlotFromPalette(slotId, value) {
 
 .color-chip:hover {
   transform: scale(1.05);
+}
+
+.palette-chip {
+  width: 72px;
+  height: 56px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.add-color-btn {
+  width: 72px;
+  height: 56px;
+  border-radius: 10px;
+  border: 2px dashed #ddd;
+  background: #fafafa;
+  cursor: pointer;
+  font-size: 18px;
+  color: #bbb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.font-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.palette-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .font-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .palette-chip,
+  .add-color-btn {
+    width: 100% !important;
+    height: 48px !important;
+  }
 }
 </style>

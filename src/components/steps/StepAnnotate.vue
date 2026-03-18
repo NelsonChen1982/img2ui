@@ -14,6 +14,17 @@ const drawing = ref(false)
 const sx = ref(0)
 const sy = ref(0)
 const activeType = ref(null)
+const expandedCat = ref(null) // for mobile accordion
+
+function toggleCat(catIdx) {
+  expandedCat.value = expandedCat.value === catIdx ? null : catIdx
+}
+
+const isMobile = ref(false)
+onMounted(() => {
+  isMobile.value = window.innerWidth <= 768
+  window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 768 })
+})
 
 function t(obj) {
   if (!obj) return ''
@@ -245,18 +256,35 @@ function clearAnnotations() {
       </p>
     </div>
 
-    <!-- Component Type Selector -->
+    <!-- Mobile: skip annotation entirely -->
+    <div v-if="isMobile" style="text-align: center; padding: 40px 20px;">
+      <div style="font-size: 40px; margin-bottom: 16px; opacity: 0.2;">
+        <i class="fa-duotone fa-thin fa-display"></i>
+      </div>
+      <p style="font-size: 15px; color: #888; margin-bottom: 8px;">
+        {{ t({ zh: '元件標注需要在電腦上操作', en: 'Annotation requires a desktop browser', ja: 'コンポーネント注釈にはPC版ブラウザが必要です' }) }}
+      </p>
+      <p style="font-size: 13px; color: #bbb;">
+        {{ t({ zh: '略過此步驟將產出全部 25 種元件', en: 'Skipping will generate all 25 component types', ja: 'スキップすると全25コンポーネントが生成されます' }) }}
+      </p>
+    </div>
+
+    <!-- Desktop: full annotation UI -->
+    <template v-if="!isMobile">
+
+    <!-- Component Type Selector — Desktop: inline wrap / Mobile: accordion -->
     <div
+      class="type-panel"
       style="
         background: #fff;
         border-radius: 12px;
         border: 1px solid #e8e8e8;
         padding: 10px 14px;
         margin-bottom: 14px;
-        overflow-x: auto;
       "
     >
-      <div style="display: flex; gap: 6px; flex-wrap: wrap">
+      <!-- Desktop: flat list -->
+      <div v-if="!isMobile" style="display: flex; gap: 6px; flex-wrap: wrap">
         <template v-for="(category, catIdx) in COMP_TYPES" :key="catIdx">
           <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0">
             <span
@@ -297,15 +325,78 @@ function clearAnnotations() {
           </div>
           <div
             v-if="catIdx < COMP_TYPES.length - 1"
-            style="
-              width: 1px;
-              height: 20px;
-              background: #e8e8e8;
-              margin: 0 6px;
-              flex-shrink: 0;
-            "
+            style="width: 1px; height: 20px; background: #e8e8e8; margin: 0 6px; flex-shrink: 0;"
           />
         </template>
+      </div>
+
+      <!-- Mobile: accordion -->
+      <div v-else style="display: flex; flex-direction: column; gap: 4px;">
+        <div v-for="(category, catIdx) in COMP_TYPES" :key="catIdx">
+          <button
+            @click="toggleCat(catIdx)"
+            class="cat-toggle"
+            :style="{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              padding: '8px 4px',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              borderBottom: expandedCat === catIdx ? '1px solid #eee' : 'none',
+            }"
+          >
+            <span
+              :style="{
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                color: category.color,
+              }"
+            >
+              {{ category.cat.toUpperCase() }}
+              <span style="font-weight: 400; color: #bbb; margin-left: 4px;">{{ category.items.length }}</span>
+            </span>
+            <i
+              class="fa-duotone fa-thin fa-chevron-down"
+              :style="{
+                fontSize: '10px',
+                color: '#bbb',
+                transition: 'transform 0.2s',
+                transform: expandedCat === catIdx ? 'rotate(180deg)' : 'none',
+              }"
+            ></i>
+          </button>
+          <div
+            v-show="expandedCat === catIdx"
+            style="display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0 4px;"
+          >
+            <button
+              v-for="item in category.items"
+              :key="item.id"
+              :data-type="item.id"
+              class="type-btn"
+              @click="selectType({ id: item.id, label: item.label, color: category.color })"
+              :style="{
+                '--tc': category.color,
+                '--tc-alpha': ha(category.color, 0.12),
+                padding: '5px 10px',
+                fontSize: '12px',
+                border: '1px solid var(--tc-alpha)',
+                borderRadius: '6px',
+                background: 'transparent',
+                color: 'var(--tc)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }"
+            >
+              <i :class="'fa-duotone fa-thin ' + item.fa" style="opacity: 0.5; margin-right: 4px; font-size: 11px;"></i>
+              <span>{{ item.label }}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -402,6 +493,8 @@ function clearAnnotations() {
         </span>
       </template>
     </div>
+
+    </template><!-- end desktop annotation UI -->
   </div>
 </template>
 

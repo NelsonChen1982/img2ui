@@ -96,82 +96,79 @@ function completeTask(index) {
       {{ t(I.s2.desc) }}
     </p>
 
-    <!-- Two-column grid: image preview + task checklist -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px">
-      <!-- Left: Image preview with scan-line animation -->
+    <!-- Task checklist (top) -->
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
       <div
-        style="
-          border-radius: 14px;
-          overflow: hidden;
-          position: relative;
-          background: #f0f0f0;
-          max-height: 320px;
-        "
+        v-for="task in tasks"
+        :key="task.id"
+        :style="{
+          background: '#fff',
+          border: '1px solid #e8e8e8',
+          borderRadius: '10px',
+          padding: '10px 12px',
+          opacity: task.completed ? 1 : 0.2,
+          transition: 'all 0.5s',
+        }"
+        :class="{ 'fade-up': task.completed }"
       >
-        <img
-          v-if="pipelineStore.imgDataUrl"
-          :src="pipelineStore.imgDataUrl"
-          style="width: 100%; object-fit: cover; opacity: 0.8; max-height: 320px"
-          alt="scanning"
-        />
-        <div style="position: absolute; inset: 0; background: rgba(0, 0, 0, 0.02)">
-          <div class="scan-line"></div>
-        </div>
-        <div
-          id="scan-status"
-          style="
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            font-size: 11px;
-            font-family: monospace;
-            color: rgba(0, 0, 0, 0.3);
-          "
-        >
-          {{ t(I.s2.scanning) }}
-        </div>
-      </div>
-
-      <!-- Right: Task checklist -->
-      <div style="display: flex; flex-direction: column; gap: 8px">
-        <div
-          v-for="task in tasks"
-          :key="task.id"
-          :style="{
-            background: '#fff',
-            border: '1px solid #e8e8e8',
-            borderRadius: '10px',
-            padding: '10px 12px',
-            opacity: task.completed ? 1 : 0.2,
-            transition: 'all 0.5s',
-          }"
-          :class="{ 'fade-up': task.completed }"
-        >
-          <div style="display: flex; align-items: center; gap: 10px">
-            <div
-              :style="{
-                width: '16px',
-                height: '16px',
-                borderRadius: '50%',
-                border: task.completed ? 'none' : '1.5px solid #ccc',
-                background: task.completed ? '#222' : 'transparent',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                transition: 'all 0.3s',
-              }"
-            >
-              <svg v-if="task.completed" width="8" height="7" fill="none">
-                <path d="M1 3.5l2 2L7 1" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />
-              </svg>
-            </div>
-            <div>
-              <div style="font-size: 13px; font-weight: 600; color: #333">{{ task.l }}</div>
-              <div style="font-size: 11px; color: #aaa">{{ task.s }}</div>
-            </div>
+        <div style="display: flex; align-items: center; gap: 10px">
+          <div
+            :style="{
+              width: '16px',
+              height: '16px',
+              borderRadius: '50%',
+              border: task.completed ? 'none' : '1.5px solid #ccc',
+              background: task.completed ? '#222' : 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'all 0.3s',
+            }"
+          >
+            <svg v-if="task.completed" width="8" height="7" fill="none">
+              <path d="M1 3.5l2 2L7 1" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </div>
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #333">{{ task.l }}</div>
+            <div style="font-size: 11px; color: #aaa">{{ task.s }}</div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Image preview with scan-line animation (bottom) -->
+    <div
+      style="
+        border-radius: 14px;
+        overflow: hidden;
+        position: relative;
+        background: #f0f0f0;
+        max-height: 360px;
+      "
+    >
+      <img
+        v-if="pipelineStore.imgDataUrl"
+        :src="pipelineStore.imgDataUrl"
+        style="width: 100%; object-fit: cover; opacity: 0.8; max-height: 360px"
+        alt="scanning"
+      />
+      <div style="position: absolute; inset: 0; background: rgba(0, 0, 0, 0.02)">
+        <div class="scan-line"></div>
+      </div>
+      <div
+        id="scan-status"
+        style="
+          position: absolute;
+          bottom: 10px;
+          left: 10px;
+          font-size: 11px;
+          font-family: monospace;
+          color: rgba(0, 0, 0, 0.3);
+        "
+      >
+        {{ t(I.s2.scanning) }}
       </div>
     </div>
   </div>

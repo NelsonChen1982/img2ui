@@ -95,10 +95,10 @@ export function autoAssignSlots(extractedColors) {
       (byLum.find((c) => c.lum > 200) || byLum[byLum.length - 1])?.hex ||
       '#f5f5f5',
     text: (byLum.find((c) => c.lum < 60) || byLum[0])?.hex || '#1a1a1a',
-    border: ha(
-      (byLum.find((c) => c.lum < 60) || byLum[0])?.hex || '#1a1a1a',
-      0.14
-    ),
+    border:
+      (byLum.find((c) => c.lum > 150 && c.lum < 230) ||
+       byLum.find((c) => c.lum > 100 && c.lum < 230))?.hex ||
+      '#d0d0d0',
   };
 
   // Already-used hexes (avoid reusing primary/secondary/accent for feedback slots)

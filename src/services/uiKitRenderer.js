@@ -21,8 +21,8 @@ function cr(DS, label, content) {
   const cardBorder = DS.isDark
     ? ha(DS.colors.surface, 0.08)
     : ha(DS.colors.text, 0.08);
-  return `<div class="kit-section" style="background:${cardBg};border:1px solid ${cardBorder};box-shadow:${DS.shadows.sm};border-radius:14px;padding:18px 20px;margin-bottom:14px;">
-    <div class="kit-section-label" style="color:${DS.colors.primary};font-size:10px;font-weight:700;letter-spacing:.08em;margin-bottom:14px;">${label.toUpperCase()}</div>${content}</div>`;
+  return `<div class="kit-section" style="background:${cardBg};border:1px solid ${cardBorder};box-shadow:${DS.shadows.sm};border-radius:14px;padding:18px 20px;margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
+    <div class="kit-section-label" style="color:${DS.colors.primary};font-size:10px;font-weight:700;letter-spacing:.08em;margin-bottom:14px;">${label.toUpperCase()}</div><div style="min-width:0;">${content}</div></div>`;
 }
 
 /* ── 25 default renderers ── */

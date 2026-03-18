@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
 import { I } from '../../data/i18n'
@@ -9,6 +9,12 @@ import { COMP_META } from '../../data/compMeta'
 
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
+
+const isMobile = ref(false)
+onMounted(() => {
+  isMobile.value = window.innerWidth <= 768
+  window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 768 })
+})
 
 function t(obj) {
   if (!obj) return ''
@@ -123,7 +129,7 @@ function handleDownloadHTML() {
       <div class="af-left">
         <button class="af-btn af-btn-back" @click="handleBack"><i class="fa-duotone fa-thin fa-arrow-left" style="margin-right:4px;font-size:12px;"></i>{{ backButtonText }}</button>
         <span>
-          <button v-if="showStep5Controls" class="af-btn-secondary" @click="handleClear">
+          <button v-if="showStep5Controls && !isMobile" class="af-btn-secondary" @click="handleClear">
             {{ t(I.s5.clear) }}
           </button>
         </span>
@@ -133,12 +139,12 @@ function handleDownloadHTML() {
 
       <div class="af-right">
         <span>
-          <button v-if="showStep5Controls" class="af-btn-secondary" @click="handleSkip">
+          <button v-if="showStep5Controls && !isMobile" class="af-btn-secondary" @click="handleSkip">
             {{ t(I.s5.skip) }}
           </button>
         </span>
-        <button class="af-btn af-btn-next" @click="handleNext">
-          {{ nextButtonText }} <i class="fa-duotone fa-thin fa-arrow-right" style="margin-left:4px;font-size:14px;"></i>
+        <button class="af-btn af-btn-next" @click="showStep5Controls && isMobile ? handleSkip() : handleNext()">
+          {{ showStep5Controls && isMobile ? t(I.s5.skipGenerate) : nextButtonText }} <i class="fa-duotone fa-thin fa-arrow-right" style="margin-left:4px;font-size:14px;"></i>
         </button>
       </div>
     </template>
@@ -156,7 +162,7 @@ function handleDownloadHTML() {
       <div class="af-right">
         <button class="af-btn-secondary" @click="handleDownloadJSON"><i class="fa-duotone fa-thin fa-download" style="margin-right:4px;"></i>{{ t(I.s7.dlJSON) }}</button>
         <button class="af-btn-secondary" @click="handleDownloadSKILL"><i class="fa-duotone fa-thin fa-download" style="margin-right:4px;"></i>{{ t(I.s7.dlSkill) }}</button>
-        <button class="af-btn af-btn-next" style="padding:8px 16px;font-size:12px;" @click="handleDownloadHTML"><i class="fa-duotone fa-thin fa-download" style="margin-right:4px;"></i>{{ t(I.s7.dlHTML) }}</button>
+        <button class="af-btn af-btn-next" @click="handleDownloadHTML"><i class="fa-duotone fa-thin fa-download" style="margin-right:4px;"></i>{{ t(I.s7.dlHTML) }}</button>
       </div>
     </template>
   </div>

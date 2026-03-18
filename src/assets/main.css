@@ -440,12 +440,15 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
 }
 
 .af-btn {
-  padding: 8px 20px;
+  padding: 0 20px;
+  height: 36px;
   font-size: 13px;
   border-radius: 10px;
   cursor: pointer;
   font-weight: 600;
   transition: all .15s;
+  display: inline-flex;
+  align-items: center;
 }
 
 .af-btn-back {
@@ -472,13 +475,16 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
 }
 
 .af-btn-secondary {
-  padding: 6px 14px;
+  padding: 0 14px;
+  height: 36px;
   font-size: 12px;
   border: 1px solid #ddd;
   border-radius: 8px;
   background: #fff;
   color: #555;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
 }
 
 .af-btn-secondary:hover {
@@ -505,16 +511,32 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
 @media (max-width: 768px) {
   main {
     padding: 16px !important;
-    padding-bottom: 80px !important;
+    padding-bottom: 100px !important;
   }
 
   .action-footer {
-    padding: 10px 16px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+  }
+
+  .action-footer .af-left,
+  .action-footer .af-right {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
   }
 
   .af-btn {
-    padding: 8px 14px;
+    padding: 0 14px;
+    height: 34px;
     font-size: 12px;
+  }
+
+  .af-btn-secondary {
+    height: 34px;
+    font-size: 11px;
   }
 
   .action-footer .af-center {
@@ -573,25 +595,6 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
     min-height: 260px !important;
   }
 
-  #step-7>div:first-child {
-    flex-direction: column !important;
-    gap: 10px;
-  }
-
-  #step-7>div:first-child>div:last-child {
-    flex-wrap: wrap;
-  }
-
-  #step-7>div:last-child {
-    flex-direction: column !important;
-  }
-
-  #json-panel {
-    width: 100% !important;
-    position: static !important;
-    max-height: 400px !important;
-  }
-
   #ui-kit-render {
     min-width: 0;
   }
@@ -611,7 +614,19 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
   }
 
   .kit-section {
-    padding: 16px;
+    padding: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #ui-kit-render {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  /* Scale down inner content of kit sections to fit mobile */
+  #ui-kit-render .kit-section > *:not(.kit-section-label) {
+    max-width: 100%;
   }
 
   h1 {
