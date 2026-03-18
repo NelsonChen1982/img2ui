@@ -11,6 +11,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { I } from '../data/i18n.js';
+import { DAILY_LIMIT } from '../data/constants.js';
 
 /**
  * Cookie utilities
@@ -40,7 +41,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const selectedProvider = ref('gpt4o-mini');
   const selectedCSSFramework = ref('tailwind');
   const email = ref('');
-  const rateLimitRemaining = ref(5);
+  const rateLimitRemaining = ref(DAILY_LIMIT);
   const devSettings = ref({
     base: import.meta.env.VITE_API_BASE || '',
     anthropic: '',

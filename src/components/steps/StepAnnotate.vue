@@ -262,7 +262,7 @@ function clearAnnotations() {
         <i class="fa-duotone fa-thin fa-display"></i>
       </div>
       <p style="font-size: 15px; color: #888; margin-bottom: 8px;">
-        {{ t({ zh: '元件標注需要在電腦上操作', en: 'Annotation requires a desktop browser', ja: 'コンポーネント注釈にはPC版ブラウザが必要です' }) }}
+        {{ t({ zh: '元件標註需要在電腦上操作', en: 'Annotation requires a desktop browser', ja: 'コンポーネント注釈にはPC版ブラウザが必要です' }) }}
       </p>
       <p style="font-size: 13px; color: #bbb;">
         {{ t({ zh: '略過此步驟將產出全部 25 種元件', en: 'Skipping will generate all 25 component types', ja: 'スキップすると全25コンポーネントが生成されます' }) }}

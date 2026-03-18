@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
 import { I } from '../../data/i18n'
@@ -7,6 +7,7 @@ import { analyzeAnnotationsWithAI, analyzeHolisticDesign } from '../../services/
 import { COMP_META } from '../../data/compMeta'
 import { COMP_SKELETON } from '../../data/compSkeleton'
 import { VARIATION_AXIS } from '../../data/constants'
+import { darken } from '../../services/colorUtils'
 
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
@@ -15,6 +16,12 @@ const progress = ref(0)
 const tasks = ref([])
 const annoProgress = ref('')
 const analysisResults = ref([])
+
+const barGradient = computed(() => {
+  const primary = pipelineStore.colorSlots?.primary
+  if (!primary) return 'linear-gradient(90deg, #6366f1, #8b5cf6)'
+  return `linear-gradient(90deg, ${primary}, ${darken(primary, 20)})`
+})
 
 function t(obj) {
   if (!obj) return ''
@@ -223,7 +230,7 @@ async function startProcessing() {
           :style="{
             width: progress + '%',
             height: '8px',
-            background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+            background: barGradient,
             transition: 'width 0.3s ease-out',
           }"
         />

@@ -19,7 +19,7 @@ export const STEP_COUNT = 6;
 // Step 4 (Tokens) removed — wizard shows 6 steps
 export const STEP_MAP = [1,2,3,5,6,7]; // wizard index → internal step ID
 
-export const DAILY_LIMIT = 5;
+export const DAILY_LIMIT = 30;
 
 // Provider list with labels
 export const PROVIDERS = {

@@ -24,8 +24,7 @@
  *   GET  /health                — Health check
  */
 
-const DAILY_LIMIT = 5;
-const COMPONENT_DAILY_LIMIT = 10;
+const DAILY_LIMIT = 30;
 const RATE_WINDOW = 86400;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_BODY_SIZE = 7 * 1024 * 1024;  // 7 MB (base64 overhead)
@@ -652,11 +651,9 @@ Only return valid JSON, no markdown.`;
         return new Response(JSON.stringify({ error: 'missing_image' }), { status: 400, headers });
       }
 
-      // Component analysis rate limit (10/day per IP, skip for dev bypass)
-      if (!devBypassAC) {
-        const compRate = await checkAndIncrementRate(env, ip, email, headers, COMPONENT_DAILY_LIMIT, 'comp');
-        if (compRate.error) return compRate.response;
-      }
+      // Component analysis shares the upload rate limit — no separate check.
+      // The user already consumed a daily use when uploading; subsequent
+      // analyse/save calls within the same session should not be blocked.
 
       if (env.DB) {
         await upsertEmail(env.DB, email, ip);

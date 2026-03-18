@@ -53,7 +53,7 @@ const centerText = computed(() => {
     const n = pipelineStore.annotations.length
     if (n === 0) return ''
     const lang = settingsStore.lang
-    if (lang === 'zh') return `${n} 個標注`
+    if (lang === 'zh') return `${n} 個標註`
     if (lang === 'ja') return `${n} 件の注釈`
     return `${n} annotation${n === 1 ? '' : 's'}`
   }
