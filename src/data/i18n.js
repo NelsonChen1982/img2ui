@@ -60,6 +60,7 @@ export const I = {
     headingFont: { zh:'標題字體', en:'Heading Font', ja:'見出しフォント' },
     bodyFont: { zh:'內文字體', en:'Body Font', ja:'本文フォント' },
     next: { zh:'元件標註', en:'Annotate', ja:'注釈' },
+    skipAnnotate: { zh:'略過標註，直接產出', en:'Skip annotations, generate', ja:'注釈をスキップして生成' },
   },
   s5: {
     title: { zh:'元件標註', en:'Component Annotation', ja:'コンポーネント注釈' },
@@ -112,6 +113,9 @@ export const I = {
     fmtDesignMdName: { zh:'DESIGN.md', en:'DESIGN.md', ja:'DESIGN.md' },
     fmtDesignMdDesc: { zh:'自然語言設計系統描述', en:'Natural-language design system', ja:'自然言語デザインシステム' },
     fmtDesignMdBadge: { zh:'for Google Stitch', en:'for Google Stitch', ja:'for Google Stitch' },
+    fmtFigmaName: { zh:'Figma JSON', en:'Figma JSON', ja:'Figma JSON' },
+    fmtFigmaDesc: { zh:'Figma Plugin 可匯入的 UI Kit', en:'UI Kit for Figma Plugin import', ja:'Figma Plugin用UIキット' },
+    fmtFigmaBadge: { zh:'NEW', en:'NEW', ja:'NEW' },
   },
   slotLabels: {
     primary:  { zh:'主色',   en:'Primary',   ja:'メイン' },

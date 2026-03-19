@@ -1001,3 +1001,58 @@ export function downloadHTML(DS, uiKitHtml) {
 
   dl(html, 'ui-kit-preview.html', 'text/html');
 }
+
+/**
+ * Fetch Figma clipboard data via Worker proxy → code.to.design API.
+ * Must be called BEFORE the user triggers copy (async fetch, then sync copy).
+ * @param {string} uiKitHtml - Rendered UI Kit HTML
+ * @returns {Promise<string>} Figma-compatible clipboard HTML
+ */
+export async function fetchFigmaClipboard(uiKitHtml) {
+  if (!uiKitHtml) throw new Error('No UI Kit HTML');
+
+  const fullHtml = `<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; }
+.kit-section { border-radius: 16px; padding: 24px; margin-bottom: 16px; }
+.kit-section-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; margin-bottom: 16px; }
+input, select { font-family: inherit; }
+</style>
+<div style="max-width:960px;">
+  ${uiKitHtml}
+</div>`;
+
+  const apiBase = import.meta.env.VITE_API_BASE || '';
+  const devKey = import.meta.env.VITE_DEV_BYPASS_KEY || '';
+
+  const resp = await fetch(`${apiBase}/api/figma-clipboard`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-dev-key': devKey,
+    },
+    body: JSON.stringify({ html: fullHtml }),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Figma clipboard API error ${resp.status}: ${text}`);
+  }
+
+  return resp.text();
+}
+
+/**
+ * Write pre-fetched Figma clipboard data to system clipboard.
+ * MUST be called synchronously inside a user click handler (within ~5s).
+ * @param {string} clipboardData - HTML string from fetchFigmaClipboard()
+ */
+export function writeFigmaClipboard(clipboardData) {
+  const handler = (e) => {
+    e.clipboardData.setData('text/html', clipboardData);
+    e.preventDefault();
+    document.removeEventListener('copy', handler);
+  };
+  document.addEventListener('copy', handler);
+  document.execCommand('copy');
+}

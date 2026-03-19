@@ -805,6 +805,49 @@ Only return valid JSON, no markdown.`;
       }
     }
 
+    // ─── Figma Clipboard Proxy (dev bypass only) ───
+    if (url.pathname === '/api/figma-clipboard' && request.method === 'POST') {
+      if (!isDevBypass(request, env)) {
+        return new Response(JSON.stringify({ error: 'dev_only' }), { status: 403, headers });
+      }
+
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
+      }
+
+      const { html: htmlContent } = body;
+      if (!htmlContent) {
+        return new Response(JSON.stringify({ error: 'missing_html' }), { status: 400, headers });
+      }
+      if (!env.CODE_TO_DESIGN_KEY) {
+        return new Response(JSON.stringify({ error: 'CODE_TO_DESIGN_KEY not configured' }), { status: 503, headers });
+      }
+
+      try {
+        const apiResp = await fetch('https://api.to.design/html', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${env.CODE_TO_DESIGN_KEY}`,
+          },
+          body: JSON.stringify({ html: htmlContent, clip: true }),
+        });
+
+        if (!apiResp.ok) {
+          const errText = await apiResp.text().catch(() => '');
+          return new Response(JSON.stringify({ error: 'api_error', status: apiResp.status, message: errText }), { status: 502, headers });
+        }
+
+        const clipData = await apiResp.text();
+        return new Response(clipData, {
+          headers: { ...headers, 'Content-Type': 'text/html; charset=utf-8' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'proxy_error', message: err.message }), { status: 502, headers });
+      }
+    }
+
     return new Response(
       JSON.stringify({ error: 'not_found' }),
       { status: 404, headers }

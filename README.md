@@ -23,7 +23,7 @@ img2ui is a browser-based tool that reverse-engineers any image into a usable De
 5. **Annotate** (optional) — draw regions on the image and label component types
 6. **Analyze** annotations with multi-provider Vision LLMs (Claude, GPT-4o, Gemini)
 7. **Render** a full UI Kit with 25 component types
-8. **Export** as JSON, SKILL.md (for coding agents), DESIGN.md (for Google Stitch), or standalone HTML
+8. **Export** as JSON, SKILL.md (for coding agents), DESIGN.md (for Google Stitch), Figma Plugin JSON, or standalone HTML
 
 ### 25 Component Types
 
@@ -68,7 +68,7 @@ Image Upload
   → Design System derivation (typography, spacing, radius, shadows)
   → [Optional] Canvas annotation + LLM Vision analysis
   → UI Kit rendering (25 component types)
-  → Export (JSON / SKILL.md / DESIGN.md / HTML)
+  → Export (JSON / SKILL.md / DESIGN.md / Figma JSON / HTML)
 ```
 
 **Tech stack:** Vue 3 (Composition API) · Pinia · Vite · Vanilla CSS
@@ -99,6 +99,7 @@ Image Upload
 | **SKILL.md** | Markdown spec for coding agents (Claude Code, Cursor, etc.) |
 | **SKILL ZIP** | Bundled archive with dual-theme tokens, analysis log, and modular skill files |
 | **DESIGN.md** | Natural-language design system for [Google Stitch](https://stitch.withgoogle.com/) screen generation |
+| **Figma JSON** | Structured JSON for Figma Plugin import — generates native Figma nodes from design tokens |
 | **HTML** | Standalone preview page with all components rendered |
 
 ## Project Structure
@@ -119,6 +120,7 @@ docs/              # Design documents
 
 | Version | Milestone |
 |---------|-----------|
+| **v0.1.1-beta** | Figma Plugin JSON export, skip-annotations shortcut from Step 3, footer layout redesign |
 | **v0.1-beta** | Code structure refactoring, dual theme (light/dark) palette generation |
 | **v0.0.4** | OpenRouter integration — Hunter Alpha, Grok 4.1 Fast, Qwen 3.5 series |
 | **v0.0.3** | Cloudflare Worker integration — rate limiting, R2 image storage, session tokens, Turnstile verification |
@@ -129,7 +131,8 @@ docs/              # Design documents
 
 - [ ] **Community Gallery** — Browse and explore design systems created by other users
 - [ ] **Smart Image Classification** — Auto-detect whether the upload is a UI screenshot or a photo, and conditionally offer the annotation workflow
-- [ ] **Figma Export via code.to.design** — Integrate [code.to.design](https://code.to.design/) API to push generated design tokens and components directly into Figma
+- [ ] **Eyedropper from Upload** — Pick colors directly from the uploaded image in the color/font tuning step
+- [ ] **Figma Native Clipboard** — Paste design tokens directly into Figma without a plugin (via fig-kiwi binary format)
 - [ ] **npm / npx Installable Package** — Package as an installable CLI skill so users can run `npx img2ui` to generate design systems directly from the terminal
 
 ## License

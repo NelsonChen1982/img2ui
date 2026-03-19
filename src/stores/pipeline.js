@@ -401,6 +401,14 @@ export const usePipelineStore = defineStore('pipeline', () => {
   const hasAnnotations = computed(() => annotations.value.length > 0);
 
   /**
+   * Skip annotations: build DS and go straight to processing (step 6)
+   */
+  function skipToProcessing() {
+    buildDS_action();
+    showStep(6);
+  }
+
+  /**
    * Advance to next step
    */
   function nextStep() {
@@ -476,6 +484,7 @@ export const usePipelineStore = defineStore('pipeline', () => {
     setSelectionStart,
     addLog,
     nextStep,
+    skipToProcessing,
     setEmail,
 
     // Computed

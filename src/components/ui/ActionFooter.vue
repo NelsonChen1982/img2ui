@@ -6,6 +6,7 @@ import { I } from '../../data/i18n'
 import { getJSONOutput, downloadSKILL, downloadSKILLZip, downloadHTML, downloadDesignMD } from '../../services/downloadService'
 import { buildUIKitHTML } from '../../services/uiKitRenderer'
 import { COMP_META } from '../../data/compMeta'
+import { buildFigmaJSON } from '../../services/figmaJsonBuilder'
 
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
@@ -44,6 +45,9 @@ const nextButtonText = computed(() => {
   }
 })
 
+// Step 3 specific: show skip-annotations button
+const showStep3Controls = computed(() => currentStep.value === 3)
+
 // Step 5 specific: show clear, skip buttons
 const showStep5Controls = computed(() => currentStep.value === 5)
 
@@ -79,6 +83,10 @@ function handleSkip() {
   pipelineStore.handleNext()
 }
 
+function handleSkipAnnotations() {
+  pipelineStore.skipToProcessing()
+}
+
 // Step 7 actions
 function handleEditColors() {
   pipelineStore.editFromResult('colors')
@@ -103,6 +111,7 @@ const exportFormats = [
   { id: 'skill-zip', icon: 'fa-folder-open', nameKey: 'fmtZipName', descKey: 'fmtZipDesc' },
   { id: 'html', icon: 'fa-browser', nameKey: 'fmtHtmlName', descKey: 'fmtHtmlDesc' },
   { id: 'design-md', icon: 'fa-palette', nameKey: 'fmtDesignMdName', descKey: 'fmtDesignMdDesc', badge: 'fmtDesignMdBadge' },
+  { id: 'figma-json', icon: 'fa-figma', iconPrefix: 'fa-brands', nameKey: 'fmtFigmaName', descKey: 'fmtFigmaDesc', badge: 'fmtFigmaBadge', devOnly: true },
 ]
 
 function toggleExport() {
@@ -158,8 +167,30 @@ function doExport() {
     downloadHTML(chosenDS, html)
   } else if (exportFormat.value === 'design-md') {
     downloadDesignMD(chosenDS, pipelineStore.holisticResult, settingsStore.lang)
+  } else if (exportFormat.value === 'figma-json') {
+    const figma = buildFigmaJSON(chosenDS)
+    if (!figma) return
+    const blob = new Blob([JSON.stringify(figma, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'figma-ui-kit.json'
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 200)
   }
   exportOpen.value = false
+}
+
+
+const figmaCopied = ref(false)
+
+function doFigmaCopy() {
+  const chosenDS = exportTheme.value === 'dark' ? pipelineStore.DS_dark : pipelineStore.DS_light
+  if (!chosenDS?.colors) return
+  const figma = buildFigmaJSON(chosenDS)
+  if (!figma) return
+  navigator.clipboard.writeText(JSON.stringify(figma, null, 2))
+  figmaCopied.value = true
+  setTimeout(() => { figmaCopied.value = false }, 2500)
 }
 
 function closeExportOnBackdrop(e) {
@@ -174,52 +205,49 @@ function closeExportOnBackdrop(e) {
     <!-- ═══ Steps 3 & 5: standard back / center / next ═══ -->
     <template v-if="!isStep7">
       <div class="af-left">
-        <button class="af-btn af-btn-back" @click="handleBack"><i class="fa-duotone fa-thin fa-arrow-left" style="margin-right:4px;font-size:12px;"></i>{{ backButtonText }}</button>
-        <span>
-          <button v-if="showStep5Controls && !isMobile" class="af-btn-secondary" @click="handleClear">
-            {{ t(I.s5.clear) }}
-          </button>
-        </span>
+        <span class="af-version">Beta v0.1</span>
+        <span v-if="centerText" class="af-annotation-count">{{ centerText }}</span>
       </div>
 
-      <div class="af-center">
-        {{ centerText }}
-        <span v-if="!centerText" style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#aaa;text-transform:uppercase;">Beta</span>
-        <button v-if="isDev && showStep5Controls" class="af-btn-secondary" style="margin-left:8px;font-size:11px;opacity:.7;" @click="pipelineStore.showDevCompare = true">
+      <div class="af-right">
+        <button class="af-btn af-btn-back" @click="handleBack"><i class="fa-duotone fa-thin fa-arrow-left" style="margin-right:4px;font-size:12px;"></i>{{ backButtonText }}</button>
+        <button v-if="showStep5Controls && !isMobile" class="af-btn-secondary" @click="handleClear">
+          {{ t(I.s5.clear) }}
+        </button>
+        <button v-if="isDev && showStep5Controls" class="af-btn-secondary" style="font-size:11px;opacity:.7;" @click="pipelineStore.showDevCompare = true">
           <i class="fa-duotone fa-thin fa-flask" style="margin-right:3px;"></i>Compare
         </button>
-      </div>
-
-      <div class="af-right" v-if="currentStep !== 2">
-        <span>
-          <button v-if="showStep5Controls && !isMobile" class="af-btn-secondary" @click="handleSkip">
-            {{ t(I.s5.skip) }}
-          </button>
-        </span>
-        <button class="af-btn af-btn-next" @click="showStep5Controls && isMobile ? handleSkip() : handleNext()">
-          {{ showStep5Controls && isMobile ? t(I.s5.skipGenerate) : nextButtonText }} <i class="fa-duotone fa-thin fa-arrow-right" style="margin-left:4px;font-size:14px;"></i>
+        <button v-if="showStep3Controls && !isMobile" class="af-btn-secondary" @click="handleSkipAnnotations">
+          <i class="fa-duotone fa-thin fa-forward" style="margin-right:4px;font-size:10px;"></i>{{ t(I.s3.skipAnnotate) }}
+        </button>
+        <button v-if="showStep5Controls && !isMobile" class="af-btn-secondary" @click="handleSkip">
+          {{ t(I.s5.skip) }}
+        </button>
+        <button v-if="currentStep !== 2" class="af-btn af-btn-next" @click="(showStep3Controls && isMobile) ? handleSkipAnnotations() : (showStep5Controls && isMobile) ? handleSkip() : handleNext()">
+          {{ (showStep3Controls && isMobile) ? t(I.s3.skipAnnotate) : (showStep5Controls && isMobile) ? t(I.s5.skipGenerate) : nextButtonText }} <i class="fa-duotone fa-thin fa-arrow-right" style="margin-left:4px;font-size:14px;"></i>
         </button>
       </div>
+
+      <div class="af-mobile-version">Beta v0.1</div>
     </template>
 
     <!-- ═══ Step 7: edit/restart on left, export on right ═══ -->
     <template v-else>
       <div class="af-left">
-        <button class="af-btn-secondary" @click="handleEditColors"><i class="fa-duotone fa-thin fa-palette" style="margin-right:4px;"></i>{{ t(I.s7.editColors) }}</button>
-        <button class="af-btn-secondary" @click="handleEditAnnotations"><i class="fa-duotone fa-thin fa-puzzle-piece" style="margin-right:4px;"></i>{{ t(I.s7.editAnnotations) }}</button>
-        <button class="af-btn-secondary" style="opacity:.6;" @click="handleRestart"><i class="fa-duotone fa-thin fa-rotate-right" style="margin-right:4px;"></i>{{ t(I.s7.restart) }}</button>
-      </div>
-
-      <div class="af-center">
-        <span style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#aaa;text-transform:uppercase;">Beta</span>
+        <span class="af-version">Beta v0.1</span>
       </div>
 
       <div class="af-right">
+        <button class="af-btn-secondary" @click="handleEditColors"><i class="fa-duotone fa-thin fa-palette" style="margin-right:4px;"></i>{{ t(I.s7.editColors) }}</button>
+        <button class="af-btn-secondary" @click="handleEditAnnotations"><i class="fa-duotone fa-thin fa-puzzle-piece" style="margin-right:4px;"></i>{{ t(I.s7.editAnnotations) }}</button>
+        <button class="af-btn-secondary" style="opacity:.6;" @click="handleRestart"><i class="fa-duotone fa-thin fa-rotate-right" style="margin-right:4px;"></i>{{ t(I.s7.restart) }}</button>
         <button class="af-btn af-btn-secondary" @click="toggleExport" style="font-weight:600;">
           <i class="fa-duotone fa-thin fa-file-export" style="margin-right:5px;"></i>
           {{ t(I.s7.exportBtn) }}
         </button>
       </div>
+
+      <div class="af-mobile-version">Beta v0.1</div>
 
       <!-- Export modal overlay -->
       <Teleport to="body">
@@ -253,11 +281,12 @@ function closeExportOnBackdrop(e) {
                   v-for="fmt in exportFormats"
                   :key="fmt.id"
                   class="export-format-row"
+                  v-show="!fmt.devOnly || isDev"
                   :class="{ 'export-format-row--active': exportFormat === fmt.id }"
                   @click="exportFormat = fmt.id"
                 >
                   <input type="radio" v-model="exportFormat" :value="fmt.id" />
-                  <i :class="'fa-duotone fa-thin ' + fmt.icon" class="export-format-icon"></i>
+                  <i :class="(fmt.iconPrefix || 'fa-duotone fa-thin') + ' ' + fmt.icon" class="export-format-icon"></i>
                   <div class="export-format-text">
                     <span class="export-format-name">
                       {{ t(I.s7[fmt.nameKey]) }}
@@ -269,10 +298,21 @@ function closeExportOnBackdrop(e) {
               </div>
             </div>
 
-            <button class="export-dl-btn" @click="doExport">
+            <div v-if="exportFormat === 'figma-json'" style="display:flex;gap:8px;">
+              <button class="export-dl-btn" style="flex:1;" @click="doFigmaCopy">
+                <i :class="figmaCopied ? 'fa-duotone fa-thin fa-check' : 'fa-duotone fa-thin fa-copy'" style="margin-right:6px;"></i>
+                {{ figmaCopied ? 'Copied!' : 'Copy' }}
+              </button>
+              <button class="export-dl-btn" style="flex:1;" @click="doExport">
+                <i class="fa-duotone fa-thin fa-download" style="margin-right:6px;"></i>
+                Download
+              </button>
+            </div>
+            <button v-else class="export-dl-btn" @click="doExport">
               <i class="fa-duotone fa-thin fa-download" style="margin-right:6px;"></i>
               {{ t(I.s7.exportDownload) }}
             </button>
+
           </div>
         </div>
       </Teleport>

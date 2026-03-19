@@ -37,6 +37,14 @@ const isEmailValid = computed(() => {
 const isDev = import.meta.env.DEV
 const isCtaDisabled = computed(() => submitting.value || !isEmailValid.value || !pipelineStore.uploadedImage || (!isDev && !turnstileToken.value))
 
+const visibleFeatures = computed(() => {
+  const base = I.s1.features[settingsStore.lang] || []
+  if (!isDev) return base
+  const lang = settingsStore.lang
+  const figmaFeat = { fa: 'fa-figma', faPrefix: 'fa-brands', t: { zh: '匯出 Figma（即將上線）', en: 'Export Figma (coming soon)', ja: 'Figma出力（近日公開）' }[lang] || 'Export Figma (coming soon)' }
+  return [...base, figmaFeat]
+})
+
 // Render Turnstile widget when email becomes valid + image uploaded
 onMounted(() => {
   watch([isEmailValid, () => pipelineStore.uploadedImage], () => {
@@ -192,7 +200,7 @@ async function handleNext() {
       <!-- Feature Cards -->
       <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap">
         <div
-          v-for="feature in I.s1.features[settingsStore.lang]"
+          v-for="feature in visibleFeatures"
           :key="feature.fa"
           style="
             text-align: center;
@@ -202,7 +210,7 @@ async function handleNext() {
           "
         >
           <div style="font-size: 22px; margin-bottom: 6px; color: #bbb">
-            <i :class="'fa-duotone fa-thin ' + feature.fa"></i>
+            <i :class="(feature.faPrefix || 'fa-duotone fa-thin') + ' ' + feature.fa"></i>
           </div>
           <div style="line-height: 1.4">{{ feature.t }}</div>
         </div>

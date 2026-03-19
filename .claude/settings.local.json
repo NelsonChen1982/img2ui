@@ -5,7 +5,18 @@
       "Bash(openspec status:*)",
       "Bash(openspec instructions:*)",
       "Bash(npm run:*)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:docs-code.to.design)",
+      "WebFetch(domain:alexharri.com)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:easylogic.medium.com)",
+      "WebFetch(domain:developers.figma.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(xxd)",
+      "Bash(npm info:*)",
+      "Bash(npm install:*)",
+      "Bash(node -e \":*)",
+      "Bash(node --input-type=module -e \":*)"
     ]
   }
 }
