@@ -39,10 +39,11 @@ const isCtaDisabled = computed(() => submitting.value || !isEmailValid.value || 
 
 const visibleFeatures = computed(() => {
   const base = I.s1.features[settingsStore.lang] || []
-  if (!isDev) return base
   const lang = settingsStore.lang
-  const figmaFeat = { fa: 'fa-figma', faPrefix: 'fa-brands', t: { zh: '匯出 Figma（即將上線）', en: 'Export Figma (coming soon)', ja: 'Figma出力（近日公開）' }[lang] || 'Export Figma (coming soon)' }
-  return [...base, figmaFeat]
+  const label = isDev
+    ? { zh: '匯出 Figma', en: 'Export Figma', ja: 'Figma出力' }[lang]
+    : { zh: '匯出 Figma（即將上線）', en: 'Export Figma (coming soon)', ja: 'Figma出力（近日公開）' }[lang]
+  return [...base, { fa: 'fa-figma', faPrefix: 'fa-brands', t: label || 'Export Figma' }]
 })
 
 // Render Turnstile widget when email becomes valid + image uploaded

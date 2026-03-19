@@ -111,7 +111,7 @@ const exportFormats = [
   { id: 'skill-zip', icon: 'fa-folder-open', nameKey: 'fmtZipName', descKey: 'fmtZipDesc' },
   { id: 'html', icon: 'fa-browser', nameKey: 'fmtHtmlName', descKey: 'fmtHtmlDesc' },
   { id: 'design-md', icon: 'fa-palette', nameKey: 'fmtDesignMdName', descKey: 'fmtDesignMdDesc', badge: 'fmtDesignMdBadge' },
-  { id: 'figma-json', icon: 'fa-figma', iconPrefix: 'fa-brands', nameKey: 'fmtFigmaName', descKey: 'fmtFigmaDesc', badge: 'fmtFigmaBadge', devOnly: true },
+  { id: 'figma-json', icon: 'fa-figma', iconPrefix: 'fa-brands', nameKey: 'fmtFigmaName', descKey: 'fmtFigmaDesc', badge: 'fmtFigmaBadge', comingSoon: true },
 ]
 
 function toggleExport() {
@@ -281,9 +281,11 @@ function closeExportOnBackdrop(e) {
                   v-for="fmt in exportFormats"
                   :key="fmt.id"
                   class="export-format-row"
-                  v-show="!fmt.devOnly || isDev"
-                  :class="{ 'export-format-row--active': exportFormat === fmt.id }"
-                  @click="exportFormat = fmt.id"
+                  :class="{
+                    'export-format-row--active': exportFormat === fmt.id,
+                    'export-format-row--disabled': fmt.comingSoon && !isDev,
+                  }"
+                  @click="!(fmt.comingSoon && !isDev) && (exportFormat = fmt.id)"
                 >
                   <input type="radio" v-model="exportFormat" :value="fmt.id" />
                   <i :class="(fmt.iconPrefix || 'fa-duotone fa-thin') + ' ' + fmt.icon" class="export-format-icon"></i>

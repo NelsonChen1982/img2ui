@@ -651,6 +651,7 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
   border-radius: 4px;
   white-space: nowrap;
 }
+.export-format-row--disabled { opacity: 0.4; pointer-events: none; }
 .export-dl-btn {
   width: 100%;
   padding: 11px 0;
