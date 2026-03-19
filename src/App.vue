@@ -13,10 +13,20 @@ import StepColors from './components/steps/StepColors.vue'
 import StepAnnotate from './components/steps/StepAnnotate.vue'
 import StepProcessing from './components/steps/StepProcessing.vue'
 import StepResult from './components/steps/StepResult.vue'
+import DevModelCompare from './components/steps/DevModelCompare.vue'
 
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
 const rateLimitStore = useRateLimitStore()
+
+// Load Font Awesome Kit dynamically from env variable
+const faKitId = import.meta.env.VITE_FA_KIT_ID
+if (faKitId && /^[a-f0-9]+$/.test(faKitId)) {
+  const s = document.createElement('script')
+  s.src = `https://kit.fontawesome.com/${faKitId}.js`
+  s.crossOrigin = 'anonymous'
+  document.head.appendChild(s)
+}
 
 const currentStep = computed(() => pipelineStore.step)
 const isDev = import.meta.env.DEV
@@ -41,6 +51,12 @@ const models = [
   { value: 'gpt4o', label: 'GPT-4o' },
   { value: 'gpt-5.4', label: 'GPT-5.4' },
   { value: 'claude-sonnet', label: 'Claude Sonnet 4' },
+  { value: 'gpt5-nano', label: 'GPT-5 Nano' },
+  { value: 'qwen3.5-35b', label: 'Qwen 3.5 35B' },
+  { value: 'qwen3.5-9b', label: 'Qwen 3.5 9B' },
+  { value: 'qwen3.5-flash', label: 'Qwen 3.5 Flash' },
+  { value: 'grok-4.1-fast', label: 'Grok 4.1 Fast' },
+  { value: 'hunter-alpha', label: 'Hunter Alpha (Free)' },
 ]
 
 const modelLabel = computed(() => {
@@ -132,6 +148,11 @@ function handleModelChange(value) {
             <span style="font-size:10px;">{{ settingsStore.lang === 'zh' ? '中文' : settingsStore.lang === 'ja' ? '日本語' : 'English' }}</span>
           </template>
         </DropdownMenu>
+
+        <!-- GitHub -->
+        <a href="https://github.com/NelsonChen1982/img2ui" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:#555;transition:color .15s;" title="GitHub">
+          <i class="fa-brands fa-github" style="font-size:15px;"></i>
+        </a>
       </div>
     </div>
 
@@ -162,4 +183,7 @@ function handleModelChange(value) {
 
   <!-- Action footer -->
   <ActionFooter />
+
+  <!-- Dev-only: model comparison overlay -->
+  <DevModelCompare v-if="isDev && pipelineStore.showDevCompare" @close="pipelineStore.showDevCompare = false" />
 </template>

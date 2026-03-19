@@ -53,8 +53,9 @@ npm run build
 To enable LLM-powered component analysis, you can configure API keys in the app's settings panel (dev mode). Supported providers:
 
 - **Anthropic** — Claude Haiku / Sonnet
-- **OpenAI** — GPT-4o / GPT-4o-mini
+- **OpenAI** — GPT-4o / GPT-4o-mini / GPT-5 series / o4-mini
 - **Google** — Gemini Flash
+- **OpenRouter** — Hunter Alpha (free), Grok 4.1 Fast, Qwen 3.5 (35B / 9B / Flash)
 
 > Images are processed locally in your browser. Only annotated regions are sent to the AI provider you select.
 
@@ -76,7 +77,19 @@ Image Upload
 - **No server required** — everything runs in the browser (AI calls are direct browser-to-API)
 - **3-tier AI fallback** — grouped analysis → individual analysis → pixel-based local heuristic
 - **Design system is computed**, not configured — derived entirely from the input image
+- **Multi-provider AI** — supports 4 providers via direct API and OpenRouter, with dev-only model comparison tooling
 - **IR-first approach** — the intermediate representation is the core asset, enabling design ↔ code bidirectionality
+
+## Dependencies & Alternatives
+
+| Dependency | Current | Swappable? | Notes |
+|-----------|---------|:----------:|-------|
+| **Icons** | Font Awesome Pro (Duotone) | Yes | Replace with emoji or any icon set |
+| **AI Providers** | Anthropic / OpenAI / Google / OpenRouter | Yes | Pick any, or skip AI entirely — local heuristic still works |
+| **Worker** | Cloudflare Worker + KV + D1 + R2 | Yes | Only needed for rate limiting & image storage; self-host with any backend |
+| **Hosting** | Cloudflare Pages | Yes | Static SPA — deploy anywhere |
+
+> The core app (color extraction → design system → UI kit) runs fully client-side with zero external dependencies.
 
 ## Export Formats
 
@@ -96,9 +109,16 @@ src/
 ├── services/      # Business logic (AI, color extraction, DS builder, renderer, export)
 ├── stores/        # Pinia stores (pipeline, settings, rateLimit)
 └── data/          # Component types, metadata, skeletons, i18n, constants
-worker/            # Optional Cloudflare Worker for rate limiting
+worker/            # Cloudflare Worker (rate limiting, R2 image storage, D1 usage log)
 docs/              # Design documents
 ```
+
+## Roadmap
+
+- [ ] **Community Gallery** — Browse and explore design systems created by other users
+- [ ] **Smart Image Classification** — Auto-detect whether the upload is a UI screenshot or a photo, and conditionally offer the annotation workflow
+- [ ] **Stitch SDK Integration** — Evaluate [google/stitch-sdk](https://github.com/google/stitch-sdk) for design-to-code generation and assess fit with the existing IR pipeline
+- [ ] **SKILL.md Output Quality** — Improve agent-friendly export based on Anthropic's [Lessons from Building Claude Code: How We Use Skills](https://www.anthropic.com/engineering/claude-code-skills)
 
 ## License
 

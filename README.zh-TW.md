@@ -53,8 +53,9 @@ npm run build
 如需啟用 LLM 元件分析，可在應用程式設定面板（開發者模式）中配置 API Key。支援的供應商：
 
 - **Anthropic** — Claude Haiku / Sonnet
-- **OpenAI** — GPT-4o / GPT-4o-mini
+- **OpenAI** — GPT-4o / GPT-4o-mini / GPT-5 系列 / o4-mini
 - **Google** — Gemini Flash
+- **OpenRouter** — Hunter Alpha（免費）、Grok 4.1 Fast、Qwen 3.5（35B / 9B / Flash）
 
 > 圖片僅在本地瀏覽器端處理。只有標注區域會傳送至你選擇的 AI 供應商。
 
@@ -76,7 +77,19 @@ npm run build
 - **無需伺服器** — 全部在瀏覽器內執行（AI 呼叫為瀏覽器直連 API）
 - **三層 AI 降級** — 群組分析 → 個別分析 → 像素級本地啟發式推斷
 - **Design System 由圖片計算產出**，非手動配置 — 完全由輸入圖片推導
+- **多供應商 AI** — 支援 4 家供應商，透過直連 API 與 OpenRouter，附開發者模式模型比較工具
 - **IR 優先** — 中間表示層是核心資產，實現設計 ↔ 程式碼雙向同步
+
+## 技術依賴與替代方案
+
+| 依賴項 | 目前使用 | 可替換？ | 說明 |
+|--------|---------|:--------:|------|
+| **圖示** | Font Awesome Pro (Duotone) | 可 | 可改用 emoji 或任何 icon set |
+| **AI 供應商** | Anthropic / OpenAI / Google / OpenRouter | 可 | 任選其一，或完全不用 AI — 本地啟發式推斷仍可運作 |
+| **Worker** | Cloudflare Worker + KV + D1 + R2 | 可 | 僅用於頻率限制與圖片儲存，可自行部署任何後端替代 |
+| **部署** | Cloudflare Pages | 可 | 純靜態 SPA，可部署至任何平台 |
+
+> 核心功能（色彩萃取 → Design System → UI Kit）完全在瀏覽器端執行，無需任何外部依賴。
 
 ## 匯出格式
 
@@ -96,9 +109,16 @@ src/
 ├── services/      # 業務邏輯（AI、色彩萃取、DS 建構、渲染器、匯出）
 ├── stores/        # Pinia stores（pipeline、settings、rateLimit）
 └── data/          # 元件類型、metadata、骨架、i18n、常數
-worker/            # 選用的 Cloudflare Worker（頻率限制）
+worker/            # Cloudflare Worker（頻率限制、R2 圖片儲存、D1 使用紀錄）
 docs/              # 設計文件
 ```
+
+## 開發路線
+
+- [ ] **社群 Gallery** — 瀏覽其他使用者建立的 Design System 作品
+- [ ] **智慧圖片分類** — 自動判斷上傳圖片為 UI 截圖或照片，依結果決定是否提供標注流程
+- [ ] **Stitch SDK 整合評估** — 評估 [google/stitch-sdk](https://github.com/google/stitch-sdk) 用於設計轉程式碼，檢視與現有 IR pipeline 的契合度
+- [ ] **SKILL.md 產出品質** — 參照 Anthropic〈[Lessons from Building Claude Code: How We Use Skills](https://www.anthropic.com/engineering/claude-code-skills)〉優化 agent 友善匯出格式
 
 ## 授權
 

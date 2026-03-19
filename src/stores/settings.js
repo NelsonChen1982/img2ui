@@ -47,6 +47,7 @@ export const useSettingsStore = defineStore('settings', () => {
     anthropic: '',
     openai: '',
     gemini: '',
+    openrouter: '',
   });
 
   /**

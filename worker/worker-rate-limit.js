@@ -71,10 +71,40 @@ const PROVIDERS = {
     model: 'gpt-5.4',
     type: 'openai',
   },
+  'gpt5-nano': {
+    api: 'https://api.openai.com/v1/chat/completions',
+    model: 'gpt-5-nano',
+    type: 'openai',
+  },
   'gemini-flash': {
     api: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
     model: 'gemini-2.0-flash',
     type: 'gemini',
+  },
+  'hunter-alpha': {
+    api: 'https://openrouter.ai/api/v1/chat/completions',
+    model: 'openrouter/hunter-alpha',
+    type: 'openrouter',
+  },
+  'grok-4.1-fast': {
+    api: 'https://openrouter.ai/api/v1/chat/completions',
+    model: 'x-ai/grok-4.1-fast',
+    type: 'openrouter',
+  },
+  'qwen3.5-35b': {
+    api: 'https://openrouter.ai/api/v1/chat/completions',
+    model: 'qwen/qwen3.5-35b-a3b',
+    type: 'openrouter',
+  },
+  'qwen3.5-9b': {
+    api: 'https://openrouter.ai/api/v1/chat/completions',
+    model: 'qwen/qwen3.5-9b',
+    type: 'openrouter',
+  },
+  'qwen3.5-flash': {
+    api: 'https://openrouter.ai/api/v1/chat/completions',
+    model: 'qwen/qwen3.5-flash-02-23',
+    type: 'openrouter',
   },
 };
 
@@ -82,8 +112,8 @@ function resolveProvider(requested, env) {
   if (requested && requested !== 'auto' && PROVIDERS[requested]) {
     return requested;
   }
+  if (env.OPENAI_API_KEY) return 'gpt4o';
   if (env.GEMINI_API_KEY) return 'gemini-flash';
-  if (env.OPENAI_API_KEY) return 'gpt4o-mini';
   return 'claude-haiku';
 }
 
@@ -205,6 +235,48 @@ async function callAnthropic(env, providerKey, imageBase64, prompt, maxTokens) {
   };
 }
 
+// Qwen 3.5 models default to hybrid thinking mode — disable to avoid <think> blocks in output
+const QWEN_THINKING_MODELS = ['qwen3.5-35b', 'qwen3.5-9b', 'qwen3.5-flash'];
+
+async function callOpenRouter(env, providerKey, imageBase64, prompt, maxTokens) {
+  const p = PROVIDERS[providerKey];
+  if (!env.OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY not configured');
+  const mediaType = detectMediaType(imageBase64);
+  const body = {
+    model: p.model,
+    max_tokens: maxTokens,
+    response_format: { type: 'json_object' },
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
+        { type: 'text', text: prompt },
+      ],
+    }],
+  };
+  // Disable thinking/reasoning for Qwen models to get clean JSON output
+  if (QWEN_THINKING_MODELS.includes(providerKey)) {
+    body.chat_template_kwargs = { enable_thinking: false };
+  }
+  const resp = await fetch(p.api, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+      'HTTP-Referer': 'https://img2ui.com',
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error?.message || 'OpenRouter API error');
+  const text = data.choices?.[0]?.message?.content || '';
+  return {
+    result: data,
+    parsed: tryParseJSON(text),
+    usage: { inputTokens: data.usage?.prompt_tokens || 0, outputTokens: data.usage?.completion_tokens || 0 },
+  };
+}
+
 async function callOpenAI(env, providerKey, imageBase64, prompt, maxTokens) {
   const p = PROVIDERS[providerKey];
   const mediaType = detectMediaType(imageBase64);
@@ -217,6 +289,7 @@ async function callOpenAI(env, providerKey, imageBase64, prompt, maxTokens) {
     body: JSON.stringify({
       model: p.model,
       max_completion_tokens: maxTokens,
+      response_format: { type: 'json_object' },
       messages: [{
         role: 'user',
         content: [
@@ -250,7 +323,7 @@ async function callGemini(env, providerKey, imageBase64, prompt, maxTokens) {
           { text: prompt },
         ],
       }],
-      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.2 },
+      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.2, responseMimeType: 'application/json' },
     }),
   });
   const data = await resp.json();
@@ -268,21 +341,55 @@ async function callGemini(env, providerKey, imageBase64, prompt, maxTokens) {
 
 function tryParseJSON(text) {
   if (!text) return null;
+  // 1. Strip <think>...</think> reasoning blocks (Qwen, DeepSeek, etc.)
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+  // 2. Strip markdown code fences
+  cleaned = cleaned.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+  // 3. Try direct parse
   try {
-    const cleaned = text.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleaned);
-  } catch {
-    return null;
+  } catch { /* fall through */ }
+  // 4. Extract first JSON object (non-greedy for shallow objects)
+  const match = cleaned.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/);
+  if (match) {
+    try {
+      return JSON.parse(match[0]);
+    } catch { /* fall through */ }
   }
+  // 5. Greedy fallback for deeply nested JSON
+  const greedyMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (greedyMatch) {
+    try {
+      return JSON.parse(greedyMatch[0]);
+    } catch { /* fall through */ }
+  }
+  // 6. Try to fix truncated JSON (missing closing braces)
+  if (greedyMatch) {
+    let attempt = greedyMatch[0];
+    for (let i = 0; i < 5; i++) {
+      attempt += '}';
+      try {
+        return JSON.parse(attempt);
+      } catch { /* keep trying */ }
+    }
+  }
+  return null;
 }
+
+// Reasoning models (o-series, gpt-5-nano) need extra tokens for chain-of-thought
+const REASONING_MODELS = ['o4-mini', 'gpt5-nano'];
 
 async function callProvider(env, providerKey, imageBase64, prompt, maxTokens = 4096) {
   const p = PROVIDERS[providerKey];
   if (!p) throw new Error(`Unknown provider: ${providerKey}`);
+  if (REASONING_MODELS.includes(providerKey)) {
+    maxTokens = Math.max(maxTokens, 4096);
+  }
   switch (p.type) {
     case 'anthropic': return callAnthropic(env, providerKey, imageBase64, prompt, maxTokens);
     case 'openai': return callOpenAI(env, providerKey, imageBase64, prompt, maxTokens);
     case 'gemini': return callGemini(env, providerKey, imageBase64, prompt, maxTokens);
+    case 'openrouter': return callOpenRouter(env, providerKey, imageBase64, prompt, maxTokens);
     default: throw new Error(`Unsupported provider type: ${p.type}`);
   }
 }

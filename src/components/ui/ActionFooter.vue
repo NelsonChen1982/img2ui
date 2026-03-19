@@ -22,6 +22,7 @@ function t(obj) {
 }
 
 const currentStep = computed(() => pipelineStore.step)
+const isDev = import.meta.env.DEV
 
 // Footer visibility - hidden on steps 1, 6
 const isFooterVisible = computed(() => ![1, 6].includes(currentStep.value))
@@ -135,7 +136,12 @@ function handleDownloadHTML() {
         </span>
       </div>
 
-      <div class="af-center">{{ centerText }}</div>
+      <div class="af-center">
+        {{ centerText }}
+        <button v-if="isDev && showStep5Controls" class="af-btn-secondary" style="margin-left:8px;font-size:11px;opacity:.7;" @click="pipelineStore.showDevCompare = true">
+          <i class="fa-duotone fa-thin fa-flask" style="margin-right:3px;"></i>Compare
+        </button>
+      </div>
 
       <div class="af-right" v-if="currentStep !== 2">
         <span>

@@ -38,6 +38,7 @@ export const usePipelineStore = defineStore('pipeline', () => {
   const imageKey = ref(''); // R2 image key after upload
   const sessionToken = ref(''); // Session token from worker (issued on upload)
   const uiKitName = ref('img2ui UI Kit'); // Editable UI Kit name for cover hero
+  const showDevCompare = ref(false); // Dev-only: model comparison overlay
 
   /**
    * Navigate to a specific step
@@ -400,6 +401,7 @@ export const usePipelineStore = defineStore('pipeline', () => {
     imageKey,
     sessionToken,
     uiKitName,
+    showDevCompare,
     uploadedImage,
 
     // Actions

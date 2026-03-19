@@ -390,7 +390,7 @@ function renderAnnotatedSection(DS, annotations, typeId) {
   const cfg = COMP_SKELETON[typeId];
 
   const slots = annos.map(a => a.aiCSS || {});
-  const hasAI = slots.some(s => s && (s.bgColor || s.backgroundColor || s.css || s.variant || s.state));
+  const hasAI = slots.some(s => s && Object.keys(s).length > 0);
 
   const normalizedSlots = slots.map(s => {
     if (s.css) return { ...s, ...s.css };

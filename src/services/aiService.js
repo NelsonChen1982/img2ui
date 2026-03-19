@@ -91,6 +91,7 @@ export async function directAPICall(
       'o4-mini': 'o4-mini',
       'gpt5-mini': 'gpt-5-mini',
       'gpt5': 'gpt-5.4',
+      'gpt5-nano': 'gpt-5-nano',
     };
     const model = modelMap[provider] || 'gpt-4o-mini';
     // GPT-5 series and o4-mini use max_completion_tokens instead of max_tokens
@@ -107,6 +108,7 @@ export async function directAPICall(
       body: JSON.stringify({
         model,
         ...tokenParam,
+        response_format: { type: 'json_object' },
         messages: [
           {
             role: 'user',
@@ -125,6 +127,52 @@ export async function directAPICall(
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error?.message || 'OpenAI API error');
+    const text = data.choices?.[0]?.message?.content || '';
+    return { text, parsed: tryParseJSON(text) };
+  }
+
+  const openrouterModelMap = {
+    'hunter-alpha': 'openrouter/hunter-alpha',
+    'grok-4.1-fast': 'x-ai/grok-4.1-fast',
+    'qwen3.5-35b': 'qwen/qwen3.5-35b-a3b',
+    'qwen3.5-9b': 'qwen/qwen3.5-9b',
+    'qwen3.5-flash': 'qwen/qwen3.5-flash-02-23',
+  };
+  if (openrouterModelMap[provider]) {
+    if (!devKeys.openrouter) throw new Error('No OpenRouter API key configured');
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${devKeys.openrouter}`,
+        'HTTP-Referer': window.location.origin,
+      },
+      body: JSON.stringify({
+        model: openrouterModelMap[provider],
+        max_tokens: maxTokens,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mediaType};base64,${imageBase64}`,
+                },
+              },
+              { type: 'text', text: prompt },
+            ],
+          },
+        ],
+        // Disable thinking for Qwen 3.5 models to get clean JSON output
+        ...((['qwen3.5-35b', 'qwen3.5-9b', 'qwen3.5-flash'].includes(provider)) && {
+          chat_template_kwargs: { enable_thinking: false },
+        }),
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error?.message || 'OpenRouter API error');
     const text = data.choices?.[0]?.message?.content || '';
     return { text, parsed: tryParseJSON(text) };
   }
@@ -148,6 +196,7 @@ export async function directAPICall(
           generationConfig: {
             maxOutputTokens: maxTokens,
             temperature: 0.2,
+            responseMimeType: 'application/json',
           },
         }),
       }
@@ -231,16 +280,39 @@ Return ONLY valid JSON, no markdown, no code fences, no explanation.`;
  */
 export function tryParseJSON(text) {
   if (!text) return null;
+  // 1. Strip <think>...</think> reasoning blocks (Qwen, DeepSeek, etc.)
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+  // 2. Strip markdown code fences
+  cleaned = cleaned.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+  // 3. Try direct parse
   try {
-    return JSON.parse(
-      text
-        .replace(/```json?\n?/g, '')
-        .replace(/```/g, '')
-        .trim()
-    );
-  } catch {
-    return null;
+    return JSON.parse(cleaned);
+  } catch { /* fall through */ }
+  // 4. Extract first JSON object from mixed text (non-greedy to avoid grabbing too much)
+  const match = cleaned.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/);
+  if (match) {
+    try {
+      return JSON.parse(match[0]);
+    } catch { /* fall through */ }
   }
+  // 5. Greedy fallback for deeply nested JSON
+  const greedyMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (greedyMatch) {
+    try {
+      return JSON.parse(greedyMatch[0]);
+    } catch { /* fall through */ }
+  }
+  // 6. Try to fix truncated JSON (missing closing braces)
+  if (greedyMatch) {
+    let attempt = greedyMatch[0];
+    for (let i = 0; i < 5; i++) {
+      attempt += '}';
+      try {
+        return JSON.parse(attempt);
+      } catch { /* keep trying */ }
+    }
+  }
+  return null;
 }
 
 /**
@@ -780,7 +852,7 @@ export async function analyzeAnnotationsWithAI(context) {
   const email = getStoredEmail?.() || '';
   const sessionToken = getSessionToken?.() || '';
   const dev = getDevKeys?.() || {};
-  const hasDirectKey = dev.anthropic || dev.openai || dev.gemini;
+  const hasDirectKey = dev.anthropic || dev.openai || dev.gemini || dev.openrouter;
   const analysisLog = [];
 
   devLog(`[img2ui] 📧 Grouped analysis — email="${email}", apiBase="${apiBase || '(none)'}"`)
@@ -1043,7 +1115,7 @@ export async function analyzeHolisticDesign(context) {
 
   const dev = getDevKeys?.() || {};
   const apiBase = window.PIC2UI_API_BASE || '';
-  const hasDirectKey = dev.anthropic || dev.openai || dev.gemini;
+  const hasDirectKey = dev.anthropic || dev.openai || dev.gemini || dev.openrouter;
 
   if (!apiBase && !hasDirectKey) {
     // No AI available — return conservative defaults

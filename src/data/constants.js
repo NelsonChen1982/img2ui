@@ -32,7 +32,8 @@ export const PROVIDERS = {
   'o4-mini': { label:'o4-mini (Reasoning)', icon:'🟢' },
   'gpt5-mini': { label:'GPT-5 Mini', icon:'🟢' },
   'gpt5': { label:'GPT-5.4', icon:'🟢' },
-  'gemini-flash': { label:'Gemini Flash', icon:'🔵' }
+  'gemini-flash': { label:'Gemini Flash', icon:'🔵' },
+  'hunter-alpha': { label:'Hunter Alpha (Free)', icon:'🟠' }
 };
 
 // CSS Framework list
