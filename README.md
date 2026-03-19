@@ -23,7 +23,7 @@ img2ui is a browser-based tool that reverse-engineers any image into a usable De
 5. **Annotate** (optional) — draw regions on the image and label component types
 6. **Analyze** annotations with multi-provider Vision LLMs (Claude, GPT-4o, Gemini)
 7. **Render** a full UI Kit with 25 component types
-8. **Export** as JSON, SKILL.md (for coding agents), or standalone HTML
+8. **Export** as JSON, SKILL.md (for coding agents), DESIGN.md (for Google Stitch), or standalone HTML
 
 ### 25 Component Types
 
@@ -68,7 +68,7 @@ Image Upload
   → Design System derivation (typography, spacing, radius, shadows)
   → [Optional] Canvas annotation + LLM Vision analysis
   → UI Kit rendering (25 component types)
-  → Export (JSON / SKILL.md / HTML)
+  → Export (JSON / SKILL.md / DESIGN.md / HTML)
 ```
 
 **Tech stack:** Vue 3 (Composition API) · Pinia · Vite · Vanilla CSS
@@ -98,6 +98,7 @@ Image Upload
 | **JSON** | Full design system + component definitions as structured IR |
 | **SKILL.md** | Markdown spec for coding agents (Claude Code, Cursor, etc.) |
 | **SKILL ZIP** | Bundled archive with dual-theme tokens, analysis log, and modular skill files |
+| **DESIGN.md** | Natural-language design system for [Google Stitch](https://stitch.withgoogle.com/) screen generation |
 | **HTML** | Standalone preview page with all components rendered |
 
 ## Project Structure
@@ -128,7 +129,7 @@ docs/              # Design documents
 
 - [ ] **Community Gallery** — Browse and explore design systems created by other users
 - [ ] **Smart Image Classification** — Auto-detect whether the upload is a UI screenshot or a photo, and conditionally offer the annotation workflow
-- [ ] **Stitch SDK Integration** — Evaluate [google/stitch-sdk](https://github.com/google/stitch-sdk) for design-to-code generation and assess fit with the existing IR pipeline
+- [ ] **Figma Export via code.to.design** — Integrate [code.to.design](https://code.to.design/) API to push generated design tokens and components directly into Figma
 - [ ] **npm / npx Installable Package** — Package as an installable CLI skill so users can run `npx img2ui` to generate design systems directly from the terminal
 
 ## License

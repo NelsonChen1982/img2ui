@@ -4,7 +4,8 @@
       "Bash(openspec new:*)",
       "Bash(openspec status:*)",
       "Bash(openspec instructions:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "WebSearch"
     ]
   }
 }

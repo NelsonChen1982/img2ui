@@ -491,62 +491,157 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
   background: #f5f5f5;
 }
 
-/* Export panel (opens upward from footer) */
-.af-export-panel {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  right: 0;
-  width: 230px;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  box-shadow: 0 -4px 24px rgba(0,0,0,.12);
-  padding: 14px;
-  z-index: 60;
+/* Export modal overlay */
+.export-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
 }
-.af-export-label {
+.export-modal {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.18);
+  width: 100%;
+  max-width: 420px;
+  padding: 24px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.export-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.export-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111;
+  margin: 0;
+}
+.export-modal-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #999;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all .12s;
+}
+.export-modal-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+.export-section {
+  margin-bottom: 18px;
+}
+.export-section-label {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .08em;
   color: #999;
   text-transform: uppercase;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
-.af-export-radios {
+.export-theme-row {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+  gap: 6px;
 }
-.af-export-radio {
+.export-theme-opt {
   display: flex;
   align-items: center;
-  gap: 3px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 13px;
   color: #777;
   cursor: pointer;
-  padding: 5px 10px;
-  border-radius: 6px;
+  padding: 7px 16px;
+  border-radius: 8px;
   border: 1px solid #eee;
   transition: all .12s;
+  flex: 1;
+  justify-content: center;
 }
-.af-export-radio:hover {
-  border-color: #ccc;
-}
-.af-export-radio--active {
+.export-theme-opt:hover { border-color: #ccc; }
+.export-theme-opt--active {
   border-color: #333;
   color: #333;
   background: #f8f8f8;
 }
-.af-export-radio input[type="radio"] {
-  display: none;
+.export-theme-opt input[type="radio"] { display: none; }
+.export-format-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.af-export-dl-btn {
-  width: 100%;
-  padding: 8px 0;
+.export-format-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1.5px solid #eee;
+  cursor: pointer;
+  transition: all .12s;
+}
+.export-format-row:hover {
+  border-color: #ccc;
+  background: #fafafa;
+}
+.export-format-row--active {
+  border-color: #333;
+  background: #f8f8f8;
+}
+.export-format-row input[type="radio"] { display: none; }
+.export-format-icon {
+  font-size: 16px;
+  color: #999;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.export-format-row--active .export-format-icon { color: #333; }
+.export-format-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.export-format-name {
   font-size: 13px;
   font-weight: 600;
+  color: #444;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.export-format-row--active .export-format-name { color: #111; }
+.export-format-desc {
+  font-size: 11px;
+  color: #999;
+}
+.export-format-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #fff;
+  background: #4285f4;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.export-dl-btn {
+  width: 100%;
+  padding: 11px 0;
+  font-size: 14px;
+  font-weight: 600;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: #222;
   color: #fff;
   cursor: pointer;
@@ -554,9 +649,18 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-top: 4px;
 }
-.af-export-dl-btn:hover {
-  background: #000;
+.export-dl-btn:hover { background: #000; }
+
+/* Mobile: export modal takes near-full width */
+@media (max-width: 768px) {
+  .export-overlay { padding: 12px; }
+  .export-modal {
+    max-width: 100%;
+    padding: 20px;
+  }
+  .export-format-row { min-height: 48px; }
 }
 
 @keyframes processing {

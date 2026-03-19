@@ -3,7 +3,7 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
 import { I } from '../../data/i18n'
-import { getJSONOutput, downloadSKILL, downloadSKILLZip, downloadHTML } from '../../services/downloadService'
+import { getJSONOutput, downloadSKILL, downloadSKILLZip, downloadHTML, downloadDesignMD } from '../../services/downloadService'
 import { buildUIKitHTML } from '../../services/uiKitRenderer'
 import { COMP_META } from '../../data/compMeta'
 
@@ -92,11 +92,18 @@ function handleRestart() {
   pipelineStore.restartPipeline()
 }
 
-// Export panel
+// Export modal
 const exportOpen = ref(false)
 const exportTheme = ref('light')
 const exportFormat = ref('json')
-const exportPanelRef = ref(null)
+
+const exportFormats = [
+  { id: 'json', icon: 'fa-brackets-curly', nameKey: 'fmtJsonName', descKey: 'fmtJsonDesc' },
+  { id: 'skill', icon: 'fa-wand-magic-sparkles', nameKey: 'fmtSkillName', descKey: 'fmtSkillDesc' },
+  { id: 'skill-zip', icon: 'fa-folder-open', nameKey: 'fmtZipName', descKey: 'fmtZipDesc' },
+  { id: 'html', icon: 'fa-browser', nameKey: 'fmtHtmlName', descKey: 'fmtHtmlDesc' },
+  { id: 'design-md', icon: 'fa-palette', nameKey: 'fmtDesignMdName', descKey: 'fmtDesignMdDesc', badge: 'fmtDesignMdBadge' },
+]
 
 function toggleExport() {
   exportTheme.value = pipelineStore.activeTheme || 'light'
@@ -149,18 +156,17 @@ function doExport() {
   } else if (exportFormat.value === 'html') {
     const html = buildUIKitHTML(chosenDS, pipelineStore.annotations, pipelineStore.analysisLog)
     downloadHTML(chosenDS, html)
+  } else if (exportFormat.value === 'design-md') {
+    downloadDesignMD(chosenDS, pipelineStore.holisticResult, settingsStore.lang)
   }
   exportOpen.value = false
 }
 
-function onClickOutsideExport(e) {
-  if (exportPanelRef.value && !exportPanelRef.value.contains(e.target)) {
+function closeExportOnBackdrop(e) {
+  if (e.target === e.currentTarget) {
     exportOpen.value = false
   }
 }
-
-onMounted(() => { document.addEventListener('click', onClickOutsideExport, true) })
-onUnmounted(() => { document.removeEventListener('click', onClickOutsideExport, true) })
 </script>
 
 <template>
@@ -209,58 +215,67 @@ onUnmounted(() => { document.removeEventListener('click', onClickOutsideExport, 
       </div>
 
       <div class="af-right">
-        <div ref="exportPanelRef" style="position:relative;">
-          <button class="af-btn af-btn-secondary" @click="toggleExport" style="font-weight:600;">
-            <i class="fa-duotone fa-thin fa-file-export" style="margin-right:5px;"></i>
-            {{ t(I.s7.exportBtn) }}
-          </button>
-          <!-- Export popover (opens upward from footer) -->
-          <div v-if="exportOpen" class="af-export-panel">
-            <div style="margin-bottom: 10px;">
-              <div class="af-export-label">{{ t(I.s7.exportTheme) }}</div>
-              <div class="af-export-radios">
-                <label class="af-export-radio" :class="{ 'af-export-radio--active': exportTheme === 'light' }">
+        <button class="af-btn af-btn-secondary" @click="toggleExport" style="font-weight:600;">
+          <i class="fa-duotone fa-thin fa-file-export" style="margin-right:5px;"></i>
+          {{ t(I.s7.exportBtn) }}
+        </button>
+      </div>
+
+      <!-- Export modal overlay -->
+      <Teleport to="body">
+        <div v-if="exportOpen" class="export-overlay" @click="closeExportOnBackdrop">
+          <div class="export-modal">
+            <div class="export-modal-header">
+              <h3 class="export-modal-title">{{ t(I.s7.exportTitle) }}</h3>
+              <button class="export-modal-close" @click="exportOpen = false">
+                <i class="fa-duotone fa-thin fa-xmark"></i>
+              </button>
+            </div>
+
+            <div class="export-section">
+              <div class="export-section-label">{{ t(I.s7.exportTheme) }}</div>
+              <div class="export-theme-row">
+                <label class="export-theme-opt" :class="{ 'export-theme-opt--active': exportTheme === 'light' }">
                   <input type="radio" v-model="exportTheme" value="light" />
                   <span>☀ Light</span>
                 </label>
-                <label class="af-export-radio" :class="{ 'af-export-radio--active': exportTheme === 'dark' }">
+                <label class="export-theme-opt" :class="{ 'export-theme-opt--active': exportTheme === 'dark' }">
                   <input type="radio" v-model="exportTheme" value="dark" />
                   <span>● Dark</span>
                 </label>
               </div>
             </div>
-            <div style="margin-bottom: 12px;">
-              <div class="af-export-label">{{ t(I.s7.exportFormat) }}</div>
-              <div class="af-export-radios">
-                <label class="af-export-radio" :class="{ 'af-export-radio--active': exportFormat === 'json' }">
-                  <input type="radio" v-model="exportFormat" value="json" />
-                  <i class="fa-duotone fa-thin fa-brackets-curly" style="margin-right:4px;font-size:11px;"></i>
-                  <span>JSON</span>
-                </label>
-                <label class="af-export-radio" :class="{ 'af-export-radio--active': exportFormat === 'skill' }">
-                  <input type="radio" v-model="exportFormat" value="skill" />
-                  <i class="fa-duotone fa-thin fa-wand-magic-sparkles" style="margin-right:4px;font-size:11px;"></i>
-                  <span>SKILL.md</span>
-                </label>
-                <label class="af-export-radio" :class="{ 'af-export-radio--active': exportFormat === 'skill-zip' }">
-                  <input type="radio" v-model="exportFormat" value="skill-zip" />
-                  <i class="fa-duotone fa-thin fa-folder-open" style="margin-right:4px;font-size:11px;"></i>
-                  <span>SKILL ZIP</span>
-                </label>
-                <label class="af-export-radio" :class="{ 'af-export-radio--active': exportFormat === 'html' }">
-                  <input type="radio" v-model="exportFormat" value="html" />
-                  <i class="fa-duotone fa-thin fa-browser" style="margin-right:4px;font-size:11px;"></i>
-                  <span>HTML</span>
+
+            <div class="export-section">
+              <div class="export-section-label">{{ t(I.s7.exportFormat) }}</div>
+              <div class="export-format-list">
+                <label
+                  v-for="fmt in exportFormats"
+                  :key="fmt.id"
+                  class="export-format-row"
+                  :class="{ 'export-format-row--active': exportFormat === fmt.id }"
+                  @click="exportFormat = fmt.id"
+                >
+                  <input type="radio" v-model="exportFormat" :value="fmt.id" />
+                  <i :class="'fa-duotone fa-thin ' + fmt.icon" class="export-format-icon"></i>
+                  <div class="export-format-text">
+                    <span class="export-format-name">
+                      {{ t(I.s7[fmt.nameKey]) }}
+                      <span v-if="fmt.badge" class="export-format-badge">{{ t(I.s7[fmt.badge]) }}</span>
+                    </span>
+                    <span class="export-format-desc">{{ t(I.s7[fmt.descKey]) }}</span>
+                  </div>
                 </label>
               </div>
             </div>
-            <button class="af-export-dl-btn" @click="doExport">
-              <i class="fa-duotone fa-thin fa-download" style="margin-right:5px;"></i>
+
+            <button class="export-dl-btn" @click="doExport">
+              <i class="fa-duotone fa-thin fa-download" style="margin-right:6px;"></i>
               {{ t(I.s7.exportDownload) }}
             </button>
           </div>
         </div>
-      </div>
+      </Teleport>
     </template>
   </div>
 </template>
