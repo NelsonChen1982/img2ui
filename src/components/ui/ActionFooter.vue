@@ -178,6 +178,7 @@ onUnmounted(() => { document.removeEventListener('click', onClickOutsideExport, 
 
       <div class="af-center">
         {{ centerText }}
+        <span v-if="!centerText" style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#aaa;text-transform:uppercase;">Beta</span>
         <button v-if="isDev && showStep5Controls" class="af-btn-secondary" style="margin-left:8px;font-size:11px;opacity:.7;" @click="pipelineStore.showDevCompare = true">
           <i class="fa-duotone fa-thin fa-flask" style="margin-right:3px;"></i>Compare
         </button>
@@ -203,7 +204,9 @@ onUnmounted(() => { document.removeEventListener('click', onClickOutsideExport, 
         <button class="af-btn-secondary" style="opacity:.6;" @click="handleRestart"><i class="fa-duotone fa-thin fa-rotate-right" style="margin-right:4px;"></i>{{ t(I.s7.restart) }}</button>
       </div>
 
-      <div class="af-center"></div>
+      <div class="af-center">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#aaa;text-transform:uppercase;">Beta</span>
+      </div>
 
       <div class="af-right">
         <div ref="exportPanelRef" style="position:relative;">

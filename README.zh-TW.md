@@ -1,7 +1,7 @@
 <div align="center">
   <img src="src/assets/logo.jpg" alt="img2ui" width="120" style="border-radius: 16px;" />
 
-  # img2ui
+  # img2ui <sup>v0.1-beta</sup>
 
   **將任意圖片轉換為完整的 Design System**
 
@@ -113,12 +113,22 @@ worker/            # Cloudflare Worker（頻率限制、R2 圖片儲存、D1 使
 docs/              # 設計文件
 ```
 
+## 更新紀錄
+
+| 版本 | 里程碑 |
+|------|--------|
+| **v0.1-beta** | 程式碼結構重構、雙主題（淺色/深色）色盤生成 |
+| **v0.0.4** | OpenRouter 整合 — Hunter Alpha、Grok 4.1 Fast、Qwen 3.5 系列 |
+| **v0.0.3** | Cloudflare Worker 整合 — 頻率限制、R2 圖片儲存、Session Token、Turnstile 驗證 |
+| **v0.0.2** | 模型選擇、開發者模式繞過、除錯日誌、響應式 UI 增強 |
+| **v0.0.1** | 初始發佈 — 六步驟精靈流程、K-means 色彩萃取、25 種元件類型、多供應商 LLM 分析、JSON / SKILL.md / HTML 匯出 |
+
 ## 開發路線
 
 - [ ] **社群 Gallery** — 瀏覽其他使用者建立的 Design System 作品
 - [ ] **智慧圖片分類** — 自動判斷上傳圖片為 UI 截圖或照片，依結果決定是否提供標注流程
 - [ ] **Stitch SDK 整合評估** — 評估 [google/stitch-sdk](https://github.com/google/stitch-sdk) 用於設計轉程式碼，檢視與現有 IR pipeline 的契合度
-- [ ] **SKILL.md 產出品質** — 參照 Anthropic〈[Lessons from Building Claude Code: How We Use Skills](https://www.anthropic.com/engineering/claude-code-skills)〉優化 agent 友善匯出格式
+- [ ] **npm / npx 安裝套件** — 封裝為可安裝的 CLI skill 套件，讓使用者可透過 `npx img2ui` 直接在終端產生 Design System
 
 ## 授權
 

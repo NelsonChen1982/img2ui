@@ -1,7 +1,7 @@
 <div align="center">
   <img src="src/assets/logo.jpg" alt="img2ui" width="120" style="border-radius: 16px;" />
 
-  # img2ui
+  # img2ui <sup>v0.1-beta</sup>
 
   **Turn any image into a complete Design System**
 
@@ -113,12 +113,22 @@ worker/            # Cloudflare Worker (rate limiting, R2 image storage, D1 usag
 docs/              # Design documents
 ```
 
+## Changelog
+
+| Version | Milestone |
+|---------|-----------|
+| **v0.1-beta** | Code structure refactoring, dual theme (light/dark) palette generation |
+| **v0.0.4** | OpenRouter integration — Hunter Alpha, Grok 4.1 Fast, Qwen 3.5 series |
+| **v0.0.3** | Cloudflare Worker integration — rate limiting, R2 image storage, session tokens, Turnstile verification |
+| **v0.0.2** | Model selection, dev bypass, debug logging, responsive UI enhancements |
+| **v0.0.1** | Initial release — 6-step wizard pipeline, K-means color extraction, 25 component types, multi-provider LLM analysis, JSON / SKILL.md / HTML export |
+
 ## Roadmap
 
 - [ ] **Community Gallery** — Browse and explore design systems created by other users
 - [ ] **Smart Image Classification** — Auto-detect whether the upload is a UI screenshot or a photo, and conditionally offer the annotation workflow
 - [ ] **Stitch SDK Integration** — Evaluate [google/stitch-sdk](https://github.com/google/stitch-sdk) for design-to-code generation and assess fit with the existing IR pipeline
-- [ ] **SKILL.md Output Quality** — Improve agent-friendly export based on Anthropic's [Lessons from Building Claude Code: How We Use Skills](https://www.anthropic.com/engineering/claude-code-skills)
+- [ ] **npm / npx Installable Package** — Package as an installable CLI skill so users can run `npx img2ui` to generate design systems directly from the terminal
 
 ## License
 
