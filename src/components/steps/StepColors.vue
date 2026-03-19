@@ -1,10 +1,11 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
 import { I } from '../../data/i18n'
 import { SLOT_IDS, SLOT_ICONS } from '../../data/constants'
-import { isLight, hexToRgb } from '../../services/colorUtils'
+import { isLight } from '../../services/colorUtils'
+import ColorDropdown from '../ui/ColorDropdown.vue'
 
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
@@ -24,16 +25,95 @@ const GOOGLE_FONTS = [
   { value: 'Noto Sans TC', category: 'sans-serif' },
   { value: 'Noto Sans JP', category: 'sans-serif' },
   { value: 'Source Sans 3', category: 'sans-serif' },
+  { value: 'Work Sans', category: 'sans-serif' },
+  { value: 'Outfit', category: 'sans-serif' },
+  { value: 'Manrope', category: 'sans-serif' },
+  { value: 'Space Grotesk', category: 'sans-serif' },
+  { value: 'Figtree', category: 'sans-serif' },
+  { value: 'Sora', category: 'sans-serif' },
+  { value: 'Lexend', category: 'sans-serif' },
+  { value: 'Urbanist', category: 'sans-serif' },
+  { value: 'Albert Sans', category: 'sans-serif' },
+  { value: 'Red Hat Display', category: 'sans-serif' },
+  { value: 'Barlow', category: 'sans-serif' },
+  { value: 'Cabin', category: 'sans-serif' },
+  { value: 'Archivo', category: 'sans-serif' },
+  { value: 'Quicksand', category: 'sans-serif' },
+  { value: 'Rubik', category: 'sans-serif' },
+  { value: 'Josefin Sans', category: 'sans-serif' },
+  { value: 'Karla', category: 'sans-serif' },
+  { value: 'Exo 2', category: 'sans-serif' },
   { value: 'Playfair Display', category: 'serif' },
   { value: 'Merriweather', category: 'serif' },
   { value: 'Lora', category: 'serif' },
   { value: 'Noto Serif TC', category: 'serif' },
   { value: 'Noto Serif JP', category: 'serif' },
   { value: 'Source Serif 4', category: 'serif' },
+  { value: 'DM Serif Display', category: 'serif' },
+  { value: 'Cormorant Garamond', category: 'serif' },
+  { value: 'Bitter', category: 'serif' },
+  { value: 'Libre Baskerville', category: 'serif' },
+  { value: 'Crimson Text', category: 'serif' },
+  { value: 'EB Garamond', category: 'serif' },
+  { value: 'Spectral', category: 'serif' },
+  { value: 'Fraunces', category: 'serif' },
   { value: 'IBM Plex Mono', category: 'monospace' },
   { value: 'JetBrains Mono', category: 'monospace' },
   { value: 'Fira Code', category: 'monospace' },
+  { value: 'Source Code Pro', category: 'monospace' },
+  { value: 'Space Mono', category: 'monospace' },
+  { value: 'Inconsolata', category: 'monospace' },
+  { value: 'Roboto Mono', category: 'monospace' },
 ]
+
+// Preload all Google Fonts on mount (lightweight swap=swap)
+onMounted(() => {
+  const families = GOOGLE_FONTS.map(f => `family=${encodeURIComponent(f.value)}:wght@400;700`).join('&')
+  const id = 'gf-preload-all'
+  if (!document.getElementById(id)) {
+    const link = document.createElement('link')
+    link.id = id
+    link.rel = 'stylesheet'
+    link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`
+    document.head.appendChild(link)
+  }
+})
+
+// Custom font dropdown state
+const openDropdown = ref(null) // 'heading' | 'body' | null
+const fontSearch = ref('')
+
+const filteredFonts = computed(() => {
+  const q = fontSearch.value.toLowerCase().trim()
+  if (!q) return GOOGLE_FONTS
+  return GOOGLE_FONTS.filter(f => f.value.toLowerCase().includes(q))
+})
+
+function toggleFontDropdown(role) {
+  if (openDropdown.value === role) {
+    openDropdown.value = null
+    fontSearch.value = ''
+  } else {
+    openDropdown.value = role
+    fontSearch.value = ''
+  }
+}
+
+function selectFont(role, font) {
+  updateFont(role, font.value)
+  openDropdown.value = null
+  fontSearch.value = ''
+}
+
+function onClickOutsideFont(e) {
+  if (openDropdown.value && !e.target.closest('.font-dropdown-wrap')) {
+    openDropdown.value = null
+    fontSearch.value = ''
+  }
+}
+
+onMounted(() => { document.addEventListener('click', onClickOutsideFont, true) })
+onUnmounted(() => { document.removeEventListener('click', onClickOutsideFont, true) })
 
 // Initialize font selections from store
 if (!pipelineStore.detectedFonts || pipelineStore.detectedFonts.length === 0) {
@@ -53,7 +133,6 @@ function updateFont(role, fontValue) {
     pipelineStore.detectedFonts.push({ role, family: font.value, category: font.category })
   }
   pipelineStore.detectedFonts = [...pipelineStore.detectedFonts]
-  // Load the font
   loadGoogleFont(font.value)
 }
 
@@ -76,67 +155,19 @@ function t(obj) {
   return obj[settingsStore.lang] || obj.en || ''
 }
 
-function handleDragOver(event) {
-  event.preventDefault()
+// Dropdown options from extracted palette
+const paletteOptions = computed(() => {
+  return pipelineStore.extractedColors.map(c => ({ hex: c.hex }))
+})
+
+// Update a light theme slot
+function updateLightSlot(slotId, hex) {
+  pipelineStore.lightColorSlots = { ...pipelineStore.lightColorSlots, [slotId]: hex }
 }
 
-function handleFileSelect(event) {
-  const files = event.target.files
-  if (files.length > 0) {
-    const file = files[0]
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      pipelineStore.setImage(e.target.result)
-    }
-    reader.readAsDataURL(file)
-  }
-}
-
-function updateColor(idx, newHex) {
-  const rgb = hexToRgb(newHex)
-  const oldHex = pipelineStore.extractedColors[idx].hex
-  pipelineStore.extractedColors[idx].hex = newHex
-  pipelineStore.extractedColors[idx].r = rgb.r
-  pipelineStore.extractedColors[idx].g = rgb.g
-  pipelineStore.extractedColors[idx].b = rgb.b
-  pipelineStore.extractedColors[idx].lum = rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114
-
-  // Update slots that use this color
-  SLOT_IDS.forEach((slotId) => {
-    if (pipelineStore.colorSlots[slotId] === oldHex) {
-      pipelineStore.colorSlots[slotId] = newHex
-    }
-  })
-
-  // Trigger reactivity
-  pipelineStore.extractedColors = [...pipelineStore.extractedColors]
-  pipelineStore.colorSlots = { ...pipelineStore.colorSlots }
-}
-
-function addColor() {
-  pipelineStore.addColor()
-  pipelineStore.extractedColors = [...pipelineStore.extractedColors]
-}
-
-function removeColor(idx) {
-  pipelineStore.removeColor(idx)
-  pipelineStore.extractedColors = [...pipelineStore.extractedColors]
-}
-
-function updateSlot(slotId, hex) {
-  pipelineStore.updateSlot(slotId, hex)
-  pipelineStore.colorSlots = { ...pipelineStore.colorSlots }
-}
-
-function pickSlotFromPalette(slotId, value) {
-  if (value === '__custom__') {
-    const input = document.querySelector(`input[data-slot="${slotId}"]`)
-    if (input) input.click()
-    return
-  }
-  if (value) {
-    updateSlot(slotId, value)
-  }
+// Update a dark theme slot
+function updateDarkSlot(slotId, hex) {
+  pipelineStore.darkColorSlots = { ...pipelineStore.darkColorSlots, [slotId]: hex }
 }
 </script>
 
@@ -149,7 +180,7 @@ function pickSlotFromPalette(slotId, value) {
       {{ t(I.s3.desc) }}
     </p>
 
-    <!-- Font Settings Section (top) -->
+    <!-- Font Settings Section -->
     <div class="tok-card">
       <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px">
         <div class="tok-label" style="margin-bottom: 0">{{ t(I.s3.fonts) }}</div>
@@ -161,50 +192,37 @@ function pickSlotFromPalette(slotId, value) {
           <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px">
             {{ t(I.s3.headingFont) }}
           </div>
-          <select
-            :value="getFont('heading')"
-            @change="(e) => updateFont('heading', e.target.value)"
-            style="
-              width: 100%;
-              font-size: 13px;
-              border: 1px solid #e0e0e0;
-              border-radius: 6px;
-              padding: 6px 8px;
-              background: #fff;
-              color: #333;
-              margin-bottom: 10px;
-            "
-          >
-            <optgroup label="Sans-serif">
-              <option v-for="f in GOOGLE_FONTS.filter(f=>f.category==='sans-serif')" :key="f.value" :value="f.value">{{ f.value }}</option>
-            </optgroup>
-            <optgroup label="Serif">
-              <option v-for="f in GOOGLE_FONTS.filter(f=>f.category==='serif')" :key="f.value" :value="f.value">{{ f.value }}</option>
-            </optgroup>
-            <optgroup label="Monospace">
-              <option v-for="f in GOOGLE_FONTS.filter(f=>f.category==='monospace')" :key="f.value" :value="f.value">{{ f.value }}</option>
-            </optgroup>
-          </select>
-          <div
-            :style="{
-              fontFamily: getFont('heading') + ', sans-serif',
-              fontSize: '22px',
-              fontWeight: 700,
-              lineHeight: '1.3',
-              color: '#222',
-            }"
-          >
+          <div class="font-dropdown-wrap">
+            <button class="font-dropdown-trigger" @click.stop="toggleFontDropdown('heading')" :style="{ fontFamily: getFont('heading') + ', sans-serif' }">
+              <span>{{ getFont('heading') }}</span>
+              <i class="fa-duotone fa-thin fa-chevron-down" style="font-size:10px;color:#999;"></i>
+            </button>
+            <div v-if="openDropdown === 'heading'" class="font-dropdown-panel">
+              <input
+                v-model="fontSearch"
+                placeholder="Search fonts..."
+                class="font-dropdown-search"
+                @click.stop
+              />
+              <div class="font-dropdown-list">
+                <template v-for="cat in ['sans-serif', 'serif', 'monospace']" :key="cat">
+                  <div v-if="filteredFonts.filter(f=>f.category===cat).length" class="font-dropdown-cat">{{ cat }}</div>
+                  <div
+                    v-for="f in filteredFonts.filter(f=>f.category===cat)"
+                    :key="f.value"
+                    class="font-dropdown-item"
+                    :class="{ 'font-dropdown-item--active': getFont('heading') === f.value }"
+                    :style="{ fontFamily: f.value + ', ' + f.category }"
+                    @click.stop="selectFont('heading', f)"
+                  >{{ f.value }}</div>
+                </template>
+              </div>
+            </div>
+          </div>
+          <div :style="{ fontFamily: getFont('heading') + ', sans-serif', fontSize: '22px', fontWeight: 700, lineHeight: '1.3', color: '#222' }">
             Heading Preview
           </div>
-          <div
-            :style="{
-              fontFamily: getFont('heading') + ', sans-serif',
-              fontSize: '14px',
-              fontWeight: 400,
-              color: '#999',
-              marginTop: '2px',
-            }"
-          >
+          <div :style="{ fontFamily: getFont('heading') + ', sans-serif', fontSize: '14px', fontWeight: 400, color: '#999', marginTop: '2px' }">
             {{ getFont('heading') }}
           </div>
         </div>
@@ -214,83 +232,59 @@ function pickSlotFromPalette(slotId, value) {
           <div style="font-size: 12px; font-weight: 600; color: #333; margin-bottom: 8px">
             {{ t(I.s3.bodyFont) }}
           </div>
-          <select
-            :value="getFont('body')"
-            @change="(e) => updateFont('body', e.target.value)"
-            style="
-              width: 100%;
-              font-size: 13px;
-              border: 1px solid #e0e0e0;
-              border-radius: 6px;
-              padding: 6px 8px;
-              background: #fff;
-              color: #333;
-              margin-bottom: 10px;
-            "
-          >
-            <optgroup label="Sans-serif">
-              <option v-for="f in GOOGLE_FONTS.filter(f=>f.category==='sans-serif')" :key="f.value" :value="f.value">{{ f.value }}</option>
-            </optgroup>
-            <optgroup label="Serif">
-              <option v-for="f in GOOGLE_FONTS.filter(f=>f.category==='serif')" :key="f.value" :value="f.value">{{ f.value }}</option>
-            </optgroup>
-            <optgroup label="Monospace">
-              <option v-for="f in GOOGLE_FONTS.filter(f=>f.category==='monospace')" :key="f.value" :value="f.value">{{ f.value }}</option>
-            </optgroup>
-          </select>
-          <div
-            :style="{
-              fontFamily: getFont('body') + ', sans-serif',
-              fontSize: '15px',
-              fontWeight: 400,
-              lineHeight: '1.6',
-              color: '#333',
-            }"
-          >
+          <div class="font-dropdown-wrap">
+            <button class="font-dropdown-trigger" @click.stop="toggleFontDropdown('body')" :style="{ fontFamily: getFont('body') + ', sans-serif' }">
+              <span>{{ getFont('body') }}</span>
+              <i class="fa-duotone fa-thin fa-chevron-down" style="font-size:10px;color:#999;"></i>
+            </button>
+            <div v-if="openDropdown === 'body'" class="font-dropdown-panel">
+              <input
+                v-model="fontSearch"
+                placeholder="Search fonts..."
+                class="font-dropdown-search"
+                @click.stop
+              />
+              <div class="font-dropdown-list">
+                <template v-for="cat in ['sans-serif', 'serif', 'monospace']" :key="cat">
+                  <div v-if="filteredFonts.filter(f=>f.category===cat).length" class="font-dropdown-cat">{{ cat }}</div>
+                  <div
+                    v-for="f in filteredFonts.filter(f=>f.category===cat)"
+                    :key="f.value"
+                    class="font-dropdown-item"
+                    :class="{ 'font-dropdown-item--active': getFont('body') === f.value }"
+                    :style="{ fontFamily: f.value + ', ' + f.category }"
+                    @click.stop="selectFont('body', f)"
+                  >{{ f.value }}</div>
+                </template>
+              </div>
+            </div>
+          </div>
+          <div :style="{ fontFamily: getFont('body') + ', sans-serif', fontSize: '15px', fontWeight: 400, lineHeight: '1.6', color: '#333' }">
             Body text preview — The quick brown fox jumps over the lazy dog.
           </div>
-          <div
-            :style="{
-              fontFamily: getFont('body') + ', sans-serif',
-              fontSize: '14px',
-              fontWeight: 400,
-              color: '#999',
-              marginTop: '2px',
-            }"
-          >
+          <div :style="{ fontFamily: getFont('body') + ', sans-serif', fontSize: '14px', fontWeight: 400, color: '#999', marginTop: '2px' }">
             {{ getFont('body') }}
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Palette Section -->
+    <!-- Extracted Palette (read-only) -->
     <div class="tok-card">
-      <div class="tok-label">{{ t(I.s3.palette) }}</div>
+      <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px">
+        <div class="tok-label" style="margin-bottom: 0">{{ t(I.s3.palette) }}</div>
+        <span style="font-size: 11px; color: #bbb">{{ t(I.s3.paletteDesc) }}</span>
+      </div>
       <div class="palette-grid">
         <div
           v-for="(color, idx) in pipelineStore.extractedColors"
           :key="idx"
-          style="text-align: center; position: relative"
+          style="text-align: center"
         >
           <div
-            class="color-chip palette-chip"
-            :style="{
-              background: color.hex,
-            }"
+            class="palette-chip"
+            :style="{ background: color.hex }"
           >
-            <input
-              type="color"
-              :value="color.hex"
-              @change="(e) => updateColor(idx, e.target.value)"
-              style="
-                position: absolute;
-                inset: 0;
-                opacity: 0;
-                cursor: pointer;
-                border-radius: 10px;
-              "
-            />
             <span
               v-if="color.ratio"
               :style="{
@@ -306,148 +300,70 @@ function pickSlotFromPalette(slotId, value) {
           <div style="font-size: 10px; font-family: monospace; color: #999; margin-top: 4px">
             {{ color.hex }}
           </div>
-          <button
-            v-if="pipelineStore.extractedColors.length > 3"
-            @click="removeColor(idx)"
-            style="
-              position: absolute;
-              top: -5px;
-              right: -5px;
-              width: 16px;
-              height: 16px;
-              border-radius: 50%;
-              border: 1px solid #ddd;
-              background: #fff;
-              font-size: 9px;
-              color: #999;
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            "
-          >
-            <i class="fa-duotone fa-thin fa-xmark" style="font-size:8px;"></i>
-          </button>
-        </div>
-
-        <!-- Add Color Button -->
-        <div style="text-align: center">
-          <button
-            @click="addColor"
-            class="add-color-btn"
-          >
-            +
-          </button>
-          <div style="font-size: 10px; color: #bbb; margin-top: 4px">
-            {{ t(I.s3.addColor).replace('+ ', '') }}
-          </div>
         </div>
       </div>
     </div>
 
-    <!-- Semantic Slots Section -->
+    <!-- Light Palette (editable) -->
     <div class="tok-card">
-      <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px">
-        <div class="tok-label" style="margin-bottom: 0">{{ t(I.s3.slots) }}</div>
-        <span style="font-size: 11px; color: #bbb">{{ t(I.s3.slotsDesc) }}</span>
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px">
+        <span style="font-size: 16px;">☀</span>
+        <div class="tok-label" style="margin-bottom: 0">{{ t(I.s3.lightPalette) }}</div>
+        <span style="font-size: 11px; color: #bbb">{{ t(I.s3.lightPaletteDesc) }}</span>
       </div>
-      <div
-        style="
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-          gap: 10px;
-        "
-      >
+      <div class="slot-grid">
         <div
           v-for="slotId in SLOT_IDS"
-          :key="slotId"
-          style="
-            border: 1px solid #e8e8e8;
-            border-radius: 10px;
-            padding: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            position: relative;
-          "
+          :key="'light-' + slotId"
+          class="slot-card"
         >
-          <div
-            class="color-chip"
-            :style="{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              background: pipelineStore.colorSlots[slotId] || '#ccc',
-              border: '1px solid rgba(0, 0, 0, 0.08)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              position: 'relative',
-            }"
-          >
-            <input
-              :data-slot="slotId"
-              type="color"
-              :value="pipelineStore.colorSlots[slotId] || '#ccc'"
-              @change="(e) => updateSlot(slotId, e.target.value)"
-              style="
-                position: absolute;
-                inset: 0;
-                opacity: 0;
-                cursor: pointer;
-                border-radius: 8px;
-              "
-            />
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px">
             <span
-              :style="{
-                fontSize: '11px',
-                color: isLight(pipelineStore.colorSlots[slotId]) ? '#333' : '#fff',
-                pointerEvents: 'none',
-              }"
-            >
-              {{ SLOT_ICONS[slotId] }}
-            </span>
-          </div>
-          <div style="flex: 1; min-width: 0">
-            <div style="font-size: 12px; font-weight: 600; color: #333">
-              {{ t(I.slotLabels[slotId]) || slotId }}
+              class="slot-icon"
+              :style="{ background: pipelineStore.lightColorSlots[slotId] || '#ccc', color: isLight(pipelineStore.lightColorSlots[slotId] || '#ccc') ? '#333' : '#fff' }"
+            >{{ SLOT_ICONS[slotId] }}</span>
+            <div>
+              <div style="font-size: 12px; font-weight: 600; color: #333">{{ t(I.slotLabels[slotId]) || slotId }}</div>
+              <div style="font-size: 10px; color: #bbb; line-height: 1.3">{{ t(I.slotHints[slotId]) }}</div>
             </div>
-            <div style="font-size: 10px; color: #bbb; line-height: 1.3;">
-              {{ t(I.slotHints[slotId]) }}
+          </div>
+          <ColorDropdown
+            :modelValue="pipelineStore.lightColorSlots[slotId] || '#ccc'"
+            :options="paletteOptions"
+            @update:modelValue="(hex) => updateLightSlot(slotId, hex)"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Dark Palette (editable) -->
+    <div class="tok-card tok-card--dark">
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px">
+        <span style="font-size: 16px;">●</span>
+        <div class="tok-label" style="margin-bottom: 0; color: #777">{{ t(I.s3.darkPalette) }}</div>
+        <span style="font-size: 11px; color: #555">{{ t(I.s3.darkPaletteDesc) }}</span>
+      </div>
+      <div class="slot-grid">
+        <div
+          v-for="slotId in SLOT_IDS"
+          :key="'dark-' + slotId"
+          class="slot-card slot-card--dark"
+        >
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px">
+            <span
+              class="slot-icon"
+              :style="{ background: pipelineStore.darkColorSlots[slotId] || '#ccc', color: isLight(pipelineStore.darkColorSlots[slotId] || '#ccc') ? '#333' : '#fff' }"
+            >{{ SLOT_ICONS[slotId] }}</span>
+            <div>
+              <div style="font-size: 12px; font-weight: 600; color: #333">{{ t(I.slotLabels[slotId]) || slotId }}</div>
+              <div style="font-size: 10px; color: #bbb; line-height: 1.3">{{ t(I.slotHints[slotId]) }}</div>
             </div>
-            <select
-              :value="pipelineStore.colorSlots[slotId] || ''"
-              @change="(e) => pickSlotFromPalette(slotId, e.target.value)"
-              style="
-                width: 100%;
-                font-size: 10px;
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                padding: 2px 4px;
-                margin-top: 3px;
-                background: #fff;
-                color: #666;
-              "
-            >
-              <option value="">
-                —
-                {{ t({ zh: '從色盤選擇', en: 'Pick from palette', ja: 'パレットから選択' }) }} —
-              </option>
-              <option
-                v-for="color in pipelineStore.extractedColors"
-                :key="color.hex"
-                :value="color.hex"
-                :selected="color.hex === pipelineStore.colorSlots[slotId]"
-              >
-                {{ color.hex }}
-              </option>
-              <option value="__custom__">✎ {{ t({ zh: '自訂', en: 'Custom', ja: 'カスタム' }) }}</option>
-            </select>
           </div>
-          <div style="font-size: 9px; font-family: monospace; color: #bbb; position: absolute; top: 4px; right: 8px">
-            {{ pipelineStore.colorSlots[slotId] || '#ccc' }}
-          </div>
+          <ColorDropdown
+            :modelValue="pipelineStore.darkColorSlots[slotId] || '#ccc'"
+            :options="paletteOptions"
+            @update:modelValue="(hex) => updateDarkSlot(slotId, hex)"
+          />
         </div>
       </div>
     </div>
@@ -464,6 +380,11 @@ function pickSlotFromPalette(slotId, value) {
   border-radius: 14px;
 }
 
+.tok-card--dark {
+  background: #1a1a1a;
+  border-color: #333;
+}
+
 .tok-label {
   font-size: 10px;
   font-weight: 700;
@@ -471,15 +392,6 @@ function pickSlotFromPalette(slotId, value) {
   color: #999;
   margin-bottom: 16px;
   text-transform: uppercase;
-}
-
-.color-chip {
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.color-chip:hover {
-  transform: scale(1.05);
 }
 
 .palette-chip {
@@ -490,22 +402,43 @@ function pickSlotFromPalette(slotId, value) {
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
 }
 
-.add-color-btn {
-  width: 72px;
-  height: 56px;
+.palette-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.slot-card {
+  border: 1px solid #e8e8e8;
   border-radius: 10px;
-  border: 2px dashed #ddd;
-  background: #fafafa;
-  cursor: pointer;
-  font-size: 18px;
-  color: #bbb;
+  padding: 10px;
+}
+
+.slot-card--dark {
+  border-color: #e0e0e0;
+  background: #fff;
+}
+
+.slot-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .font-grid {
@@ -514,11 +447,86 @@ function pickSlotFromPalette(slotId, value) {
   gap: 16px;
 }
 
-.palette-grid {
+.font-dropdown-wrap {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.font-dropdown-trigger {
+  width: 100%;
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.font-dropdown-trigger:hover {
+  border-color: #bbb;
+}
+
+.font-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  z-index: 80;
+  overflow: hidden;
+}
+
+.font-dropdown-search {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12px;
+  border: none;
+  border-bottom: 1px solid #eee;
+  outline: none;
+  background: #fafafa;
+}
+
+.font-dropdown-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.font-dropdown-cat {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #aaa;
+  text-transform: uppercase;
+  padding: 8px 12px 3px;
+}
+
+.font-dropdown-item {
+  padding: 7px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.font-dropdown-item:hover {
+  background: #f5f5f5;
+}
+
+.font-dropdown-item--active {
+  background: #f0f0f0;
+  font-weight: 600;
+  color: #111;
 }
 
 @media (max-width: 768px) {
@@ -532,10 +540,13 @@ function pickSlotFromPalette(slotId, value) {
     gap: 8px;
   }
 
-  .palette-chip,
-  .add-color-btn {
+  .palette-chip {
     width: 100% !important;
     height: 48px !important;
+  }
+
+  .slot-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

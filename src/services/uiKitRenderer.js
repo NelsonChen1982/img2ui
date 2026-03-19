@@ -16,10 +16,10 @@ const ALL_COMP_IDS = [
 /* ── card wrapper ── */
 function cr(DS, label, content) {
   const cardBg = DS.isDark
-    ? lighten(DS.colors.text, 18)
+    ? lighten(DS.colors.surface, 8)
     : 'rgba(255,255,255,.92)';
   const cardBorder = DS.isDark
-    ? ha(DS.colors.surface, 0.08)
+    ? ha(DS.colors.text, 0.08)
     : ha(DS.colors.text, 0.08);
   return `<div class="kit-section" style="background:${cardBg};border:1px solid ${cardBorder};box-shadow:${DS.shadows.sm};border-radius:14px;padding:18px 20px;margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
     <div class="kit-section-label" style="color:${DS.colors.primary};font-size:10px;font-weight:700;letter-spacing:.08em;margin-bottom:14px;">${label.toUpperCase()}</div><div style="min-width:0;">${content}</div></div>`;
@@ -30,6 +30,8 @@ function getRenderers(DS) {
   const { colors } = DS;
   const p = colors.primary;
   const s = colors.secondary;
+  const hFF = `'${DS.fonts?.heading||'Inter'}',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif`;
+  const bFF = `'${DS.fonts?.body||'Inter'}',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif`;
   const pt = safeTextColor(p, isLight(p) ? colors.text : '#ffffff');
 
   return {
@@ -37,15 +39,15 @@ function getRenderers(DS) {
       return cr(DS, 'Navbar / Header', `
       <div style="display:flex;flex-direction:column;gap:10px;">
         <div style="background:${p};border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">
-          <div style="font-weight:800;color:${pt};font-size:15px;">Brand</div>
+          <div style="font-weight:800;color:${pt};font-size:15px;font-family:${hFF};">Brand</div>
           <div style="display:flex;gap:16px;">${['Home','Product','Pricing','About'].map((l,i)=>`<span style="color:${i===0?pt:ha(pt,.55)};font-size:13px;font-weight:${i===0?600:400};">${l}</span>`).join('')}</div>
           <div style="display:flex;gap:6px;">
             <div style="padding:5px 12px;border-radius:6px;border:1px solid ${ha(pt,.3)};color:${pt};font-size:12px;">Login</div>
             <div style="padding:5px 12px;border-radius:6px;background:${pt};color:${p};font-size:12px;font-weight:700;">Sign up</div>
           </div>
         </div>
-        <div style="background:${DS.isDark?ha(colors.surface,.08):'white'};border:1px solid ${colors.border};border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">
-          <div style="font-weight:700;font-size:15px;color:${p};">Brand</div>
+        <div style="background:${DS.isDark?ha('#ffffff',.06):'white'};border:1px solid ${colors.border};border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-weight:700;font-size:15px;color:${p};font-family:${hFF};">Brand</div>
           <div style="display:flex;gap:16px;">${['Home','Product','Pricing'].map((l,i)=>`<span style="font-size:13px;font-weight:${i===0?600:400};color:${i===0?p:(DS.isDark?'#888':'#666')};">${l}</span>`).join('')}</div>
           <div style="padding:5px 12px;border-radius:6px;background:${p};color:${pt};font-size:12px;font-weight:600;">CTA</div>
         </div>
@@ -56,7 +58,7 @@ function getRenderers(DS) {
       return cr(DS, 'Hero / Banner', `
       <div style="background:linear-gradient(135deg,${p},${darken(p,40)});border-radius:12px;padding:32px 24px;margin-bottom:10px;">
         <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:${ha(pt,.45)};margin-bottom:10px;">HERO BANNER</div>
-        <div style="font-size:28px;font-weight:800;color:${pt};line-height:1.2;margin-bottom:8px;">Your headline<br>goes here</div>
+        <div style="font-size:28px;font-weight:800;color:${pt};line-height:1.2;margin-bottom:8px;font-family:${hFF};">Your headline<br>goes here</div>
         <div style="font-size:14px;color:${ha(pt,.6)};margin-bottom:18px;max-width:380px;">Supporting description text with visual language from your design.</div>
         <div style="display:flex;gap:8px;">
           <div style="padding:8px 18px;border-radius:8px;background:${pt};color:${p};font-size:13px;font-weight:700;">Get started →</div>
@@ -64,7 +66,7 @@ function getRenderers(DS) {
         </div>
       </div>
       <div style="background:${s};border-radius:12px;padding:24px;display:flex;align-items:center;gap:20px;">
-        <div style="flex:1;"><div style="font-size:18px;font-weight:700;color:${safeTextColor(s, isLight(s)?colors.text:'#ffffff')};margin-bottom:4px;">Secondary CTA</div>
+        <div style="flex:1;"><div style="font-size:18px;font-weight:700;color:${safeTextColor(s, isLight(s)?colors.text:'#ffffff')};margin-bottom:4px;font-family:${hFF};">Secondary CTA</div>
           <div style="font-size:13px;color:${ha(safeTextColor(s, isLight(s)?colors.text:'#ffffff'),.6)};">Alternative banner style with secondary color</div></div>
         <div style="padding:8px 18px;border-radius:8px;background:${safeTextColor(s, isLight(s)?colors.text:'#ffffff')};color:${s};font-size:13px;font-weight:700;">Action</div>
       </div>`);
@@ -79,7 +81,7 @@ function getRenderers(DS) {
       </div>`),
 
     sidebar: () => {
-      const bg = DS.isDark ? darken(colors.text, 10) : lighten(colors.surface, 5);
+      const bg = DS.isDark ? lighten(colors.surface, 8) : lighten(colors.surface, 5);
       return cr(DS, 'Sidebar', `<div style="background:${bg};border-radius:10px;padding:14px;width:200px;">
         <div style="font-size:10px;font-weight:700;color:#aaa;letter-spacing:.06em;margin-bottom:10px;">MENU</div>
         ${['Dashboard','Analytics','Users','Settings','Help'].map((l,i)=>`<div style="padding:7px 10px;border-radius:6px;font-size:13px;font-weight:${i===0?600:400};color:${i===0?p:(DS.isDark?'#999':'#666')};background:${i===0?ha(p,.12):'transparent'};margin-bottom:2px;display:flex;align-items:center;gap:8px;">
@@ -93,7 +95,7 @@ function getRenderers(DS) {
     footer: () => cr(DS, 'Footer', `
       <div style="border-top:1px solid ${colors.border};padding-top:16px;">
         <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
-          <div><div style="font-weight:700;font-size:14px;margin-bottom:4px;">Brand</div><div style="font-size:12px;color:${DS.isDark?'#666':'#999'};">Your tagline here</div></div>
+          <div><div style="font-weight:700;font-size:14px;margin-bottom:4px;font-family:${hFF};">Brand</div><div style="font-size:12px;color:${DS.isDark?'#666':'#999'};">Your tagline here</div></div>
           <div style="display:flex;gap:24px;">
             ${['Product','Company','Legal'].map(cat=>`<div><div style="font-size:11px;font-weight:700;color:#aaa;margin-bottom:6px;">${cat}</div>${['Link 1','Link 2'].map(l=>`<div style="font-size:12px;color:${DS.isDark?'#777':'#888'};margin-bottom:3px;">${l}</div>`).join('')}</div>`).join('')}
           </div>
@@ -141,13 +143,13 @@ function getRenderers(DS) {
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
         <div style="border:1px solid ${colors.border};border-top:3px solid ${p};border-radius:12px;padding:16px;">
           <div style="font-size:10px;font-weight:700;color:${p};margin-bottom:8px;">ACCENT</div>
-          <div style="font-size:15px;font-weight:700;margin-bottom:4px;">Card Title</div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:4px;font-family:${hFF};">Card Title</div>
           <div style="font-size:12px;color:${DS.isDark?'#888':'#999'};line-height:1.5;margin-bottom:12px;">Description text here.</div>
           <div style="padding:5px 12px;border-radius:6px;background:${ha(p,.1)};color:${p};font-size:11px;font-weight:600;display:inline-block;">Action</div>
         </div>
-        <div style="border-radius:12px;padding:16px;box-shadow:${DS.shadows.lg};background:${DS.isDark?ha(colors.surface,.08):'white'};">
+        <div style="border-radius:12px;padding:16px;box-shadow:${DS.shadows.lg};background:${DS.isDark?ha('#ffffff',.06):'white'};">
           <div style="font-size:10px;font-weight:700;color:${s};margin-bottom:8px;">ELEVATED</div>
-          <div style="font-size:15px;font-weight:700;margin-bottom:4px;">Card Title</div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:4px;font-family:${hFF};">Card Title</div>
           <div style="font-size:12px;color:${DS.isDark?'#888':'#999'};line-height:1.5;margin-bottom:12px;">Description text here.</div>
           <div style="display:flex;gap:6px;">
             <div style="padding:5px 12px;border-radius:6px;background:${s};color:${st};font-size:11px;font-weight:600;">Primary</div>
@@ -156,7 +158,7 @@ function getRenderers(DS) {
         </div>
         <div style="background:linear-gradient(135deg,${p},${s});border-radius:12px;padding:16px;">
           <div style="font-size:10px;font-weight:700;color:${ha(brandBg,.5)};margin-bottom:8px;">BRAND</div>
-          <div style="font-size:15px;font-weight:700;color:${brandBg};margin-bottom:4px;">Card Title</div>
+          <div style="font-size:15px;font-weight:700;color:${brandBg};margin-bottom:4px;font-family:${hFF};">Card Title</div>
           <div style="font-size:12px;color:${ha(brandBg,.65)};line-height:1.5;">Description text here.</div>
         </div>
       </div>`);
@@ -200,7 +202,7 @@ function getRenderers(DS) {
 
     text: () => cr(DS, 'Typography / Text', `
       <div style="max-width:320px;">
-        <div style="font-size:18px;font-weight:700;margin-bottom:8px;">Rich Text Heading</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:8px;font-family:${hFF};">Rich Text Heading</div>
         <div style="font-size:14px;color:${DS.isDark?'#aaa':'#555'};line-height:1.6;margin-bottom:8px;">Body text with <strong>bold emphasis</strong> and <em>italic styling</em>. The quick brown fox jumps over the lazy dog.</div>
         <div style="font-size:14px;color:${DS.isDark?'#aaa':'#555'};line-height:1.6;">Links styled as <span style="color:${p};text-decoration:underline;">clickable text</span> within paragraphs.</div>
       </div>`),
@@ -324,8 +326,8 @@ function getRenderers(DS) {
     },
 
     toast: () => {
-      const bg = DS.isDark ? colors.surface : colors.text;
-      const fg = DS.isDark ? colors.text : colors.surface;
+      const bg = colors.text;
+      const fg = colors.surface;
       return cr(DS, 'Toast / Snackbar', `
       <div style="display:inline-flex;align-items:center;gap:10px;padding:10px 16px;border-radius:10px;background:${bg};box-shadow:${DS.shadows.lg};">
         <div style="width:8px;height:8px;border-radius:50%;background:${p};flex-shrink:0;"></div>
@@ -339,7 +341,7 @@ function getRenderers(DS) {
       return cr(DS, 'Modal / Dialog', `
       <div style="max-width:360px;background:${bg};border-radius:14px;padding:24px;box-shadow:${DS.shadows.lg};border:1px solid ${colors.border};">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div style="font-size:16px;font-weight:700;">Dialog Title</div>
+          <div style="font-size:16px;font-weight:700;font-family:${hFF};">Dialog Title</div>
           <div style="width:24px;height:24px;border-radius:6px;background:${DS.isDark?'#333':'#f0f0f0'};display:flex;align-items:center;justify-content:center;font-size:12px;color:#999;">✕</div></div>
         <div style="font-size:13px;color:${DS.isDark?'#888':'#666'};margin-bottom:20px;line-height:1.5;">Are you sure? This action cannot be undone.</div>
         <div style="display:flex;gap:8px;justify-content:flex-end;">
@@ -348,8 +350,8 @@ function getRenderers(DS) {
     },
 
     tooltip: () => {
-      const bg = DS.isDark ? colors.surface : colors.text;
-      const fg = DS.isDark ? colors.text : colors.surface;
+      const bg = colors.text;
+      const fg = colors.surface;
       return cr(DS, 'Tooltip', `
       <div style="position:relative;display:inline-block;">
         <div style="background:${bg};color:${fg};border-radius:6px;padding:8px 14px;font-size:12px;box-shadow:${DS.shadows.sm};line-height:1.4;">
@@ -464,8 +466,8 @@ export function buildUIKitHTML(DS, annotations = [], analysisLog = []) {
   if (!DS || !DS.colors) return '<div style="padding:20px;color:#999;">No design system data.</div>';
 
   const { isDark, colors, allColors } = DS;
-  const kitBg = isDark ? colors.text : colors.surface;
-  const kitFg = isDark ? colors.surface : colors.text;
+  const kitBg = colors.surface;
+  const kitFg = colors.text;
 
   // Order: annotated first, then the rest
   let ordered;
@@ -478,17 +480,28 @@ export function buildUIKitHTML(DS, annotations = [], analysisLog = []) {
     ordered = ALL_COMP_IDS;
   }
 
-  // ── Color Palette section ──
+  // ── Color Palette section (semantic slots) ──
+  const slotEntries = [
+    { key: 'primary', label: 'Primary' },
+    { key: 'secondary', label: 'Secondary' },
+    { key: 'accent', label: 'Accent' },
+    { key: 'success', label: 'Success' },
+    { key: 'warning', label: 'Warning' },
+    { key: 'danger', label: 'Danger' },
+    { key: 'info', label: 'Info' },
+    { key: 'surface', label: 'Surface' },
+    { key: 'text', label: 'Text' },
+    { key: 'border', label: 'Border' },
+  ];
   const paletteSection = `<div class="kit-section" style="background:${ha(colors.primary,.05)};border:1px solid ${colors.border};border-radius:14px;padding:18px 20px;margin-bottom:14px;">
     <div class="kit-section-label" style="color:${colors.primary};font-size:10px;font-weight:700;letter-spacing:.08em;margin-bottom:14px;">COLOR PALETTE</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-      ${(allColors||[]).slice(0,7).map((hex,i)=>{
+      ${slotEntries.map(({key, label})=>{
+        const hex = colors[key] || '#ccc';
         const tc = isLight(hex) ? colors.text : 'white';
-        const labels = ['Primary','Secondary','Accent','Surface','Text','Border','Extra'];
-        const pct = DS.colorRatios?.[i] ? Math.round(DS.colorRatios[i]*100)+'%' : '';
         return `<div style="flex:1;min-width:70px;"><div style="height:56px;border-radius:10px;background:${hex};border:1px solid ${ha(kitFg,.06)};display:flex;align-items:flex-end;padding:8px;margin-bottom:6px;">
-            <span style="font-size:10px;font-weight:700;color:${tc};opacity:.75;">${pct}</span></div>
-          <div style="font-size:10px;font-weight:600;">${labels[i]||''}</div>
+            <span style="font-size:10px;font-weight:700;color:${tc};opacity:.75;"></span></div>
+          <div style="font-size:10px;font-weight:600;">${label}</div>
           <div style="font-size:10px;font-family:monospace;opacity:.5;">${hex}</div></div>`;
       }).join('')}
     </div>
@@ -555,10 +568,11 @@ export function buildUIKitHTML(DS, annotations = [], analysisLog = []) {
   }
 
   // ── Final assembly ──
-  return `<div style="background:${kitBg};color:${kitFg};border-radius:20px;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;">
+  const outerFF = `'${DS.fonts?.body||'Inter'}',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif`;
+  return `<div style="background:${kitBg};color:${kitFg};border-radius:20px;padding:24px;font-family:${outerFF};">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
       <div><div style="font-size:10px;font-weight:700;letter-spacing:.1em;opacity:.3;margin-bottom:4px;">GENERATED DESIGN SYSTEM</div>
-        <div style="font-size:22px;font-weight:800;">UI Kit</div>${analysisBadge}</div>
+        <div style="font-size:22px;font-weight:800;font-family:'${DS.fonts?.heading||'Inter'}',sans-serif;">${DS.name||'UI Kit'}</div>${analysisBadge}</div>
       <div style="display:flex;align-items:center;gap:6px;">
         <div style="width:10px;height:10px;border-radius:50%;background:${colors.primary};"></div>
         <span style="font-size:11px;font-family:monospace;opacity:.4;">${isDark?'Dark':'Light'} · ${(allColors||[]).length} colors · 26 components</span></div>

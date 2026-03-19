@@ -193,9 +193,9 @@ export function getJSONOutput(
   };
 
   return {
-    name: 'Custom Design System',
+    name: DS.name || 'Custom Design System',
     generatedBy: 'img2ui',
-    version: '2.1.0',
+    version: '0.1.0',
     mode: isDark ? 'dark' : 'light',
     cssFramework,
     tokens: {

@@ -29,12 +29,13 @@ function startAnalysis() {
     completed: false,
   }))
 
-  // Animate task completion with delays
-  const delays = [600, 1100, 1800, 2500, 3200, 3900]
+  // Animate task completion with evenly spaced delays (3 tasks over ~3s)
+  const totalDuration = 3000
+  const interval = totalDuration / taskList.length
   taskList.forEach((task, index) => {
     const id = setTimeout(() => {
       completeTask(index)
-    }, delays[index])
+    }, interval * (index + 1))
     timers.value.push(id)
   })
 
@@ -48,7 +49,7 @@ function startAnalysis() {
   const finalId = setTimeout(() => {
     pipelineStore.autoAssignSlots()
     pipelineStore.showStep(3)
-  }, 4600)
+  }, totalDuration + 600)
   timers.value.push(finalId)
 }
 

@@ -52,7 +52,7 @@ function isStepCurrent(stepNum) {
             color: isStepCurrent(step) || isStepCompleted(step) ? '#fff' : '#999'
           }"
         >
-          <i v-if="isStepCompleted(step)" class="fa-duotone fa-thin fa-check" style="font-size:10px;"></i>
+          <i v-if="isStepCompleted(step)" class="fa-duotone fa-thin fa-check" style="font-size:10px;color:#fff;"></i>
           <span v-else>{{ idx + 1 }}</span>
         </div>
         <div class="wiz-label" :style="{ color: isStepCurrent(step) ? '#222' : '#999' }">

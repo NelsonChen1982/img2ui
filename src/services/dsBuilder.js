@@ -8,13 +8,15 @@ import { ha, isLight } from './colorUtils.js';
 /**
  * Build design system object from color slots and extracted data
  * Derives typography scale, spacing, and other design tokens
- * @param {Object} colorSlots - Semantic color slots {primary, secondary, accent, ...}
+ * @param {Object} colorSlots - Semantic color slots {primary, secondary, accent, surface, text, border, ...}
  * @param {Array} extractedColors - Array of color objects for palette
  * @param {number} imgAvgLum - Average luminance of source image
  * @param {HTMLElement} [canvasElement] - Optional canvas element for image dimensions
+ * @param {Array} [detectedFonts] - Font detection results
+ * @param {boolean} [forceIsDark] - If provided, overrides imgAvgLum-based isDark detection
  * @returns {Object} Complete DS object with colors, typography, spacing, etc.
  */
-export function buildDS(colorSlots, extractedColors, imgAvgLum, canvasElement, detectedFonts) {
+export function buildDS(colorSlots, extractedColors, imgAvgLum, canvasElement, detectedFonts, forceIsDark) {
   const primary =
     colorSlots?.primary || extractedColors[0]?.hex || '#888';
   const secondary =
@@ -31,7 +33,7 @@ export function buildDS(colorSlots, extractedColors, imgAvgLum, canvasElement, d
     '#1a1a1a';
   const border =
     colorSlots?.border || ha(imgAvgLum < 128 ? surface : text, 0.14);
-  const isDark = imgAvgLum < 128;
+  const isDark = forceIsDark !== undefined ? forceIsDark : imgAvgLum < 128;
 
   // Derive typography scale from image dimensions
   const imgW = canvasElement?._img?.naturalWidth || 1440;

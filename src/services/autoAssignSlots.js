@@ -1,9 +1,8 @@
 /**
  * Auto-assign semantic color slots based on extracted colors
- * Pure function that returns color slot assignments
+ * Returns brand colors (primary, secondary, accent, feedback) and metadata.
+ * Surface/text/border are NOT assigned here — they are theme-dependent.
  */
-
-import { ha } from './colorUtils.js';
 
 /**
  * Get HSL from RGB values
@@ -60,11 +59,10 @@ function dangerScore(c) {
 }
 
 /**
- * Auto-assign extracted colors to semantic slots (primary, secondary, etc.)
- * Uses saturation and luminance heuristics to determine semantic roles.
- * Success/warning/danger/info always get a color from the palette.
+ * Auto-assign extracted colors to brand slots (primary, secondary, accent, feedback).
+ * Does NOT assign surface/text/border — those are theme-dependent (see deriveThemePair).
  * @param {Array} extractedColors - Array of color objects {hex, r, g, b, lum, ratio}
- * @returns {Object} Color slots object {primary, secondary, accent, ...}
+ * @returns {{ brand: Object, meta: Object }} brand colors + lightest/darkest metadata
  */
 export function autoAssignSlots(extractedColors) {
   const cols = extractedColors || [];
@@ -86,27 +84,14 @@ export function autoAssignSlots(extractedColors) {
   const secondaryHex = midTones[1]?.hex || cols[1]?.hex || '#8b5cf6';
   const accentHex = midTones[2]?.hex || cols[2]?.hex || '#ec4899';
 
-  // Assign core slots
-  const colorSlots = {
+  const brand = {
     primary: primaryHex,
     secondary: secondaryHex,
     accent: accentHex,
-    surface:
-      (byLum.find((c) => c.lum > 200) || byLum[byLum.length - 1])?.hex ||
-      '#f5f5f5',
-    text: (byLum.find((c) => c.lum < 60) || byLum[0])?.hex || '#1a1a1a',
-    border:
-      (byLum.find((c) => c.lum > 150 && c.lum < 230) ||
-       byLum.find((c) => c.lum > 100 && c.lum < 230))?.hex ||
-      '#d0d0d0',
   };
 
   // Already-used hexes (avoid reusing primary/secondary/accent for feedback slots)
   const usedCore = new Set([primaryHex, secondaryHex, accentHex]);
-
-  // For feedback colors, try to find a hue-matched color in the palette first.
-  // If not found, pick any remaining saturated color from the palette.
-  // Only fall back to hardcoded defaults if palette is very small (<= 3 colors).
 
   const remaining = bySat.filter((c) => !usedCore.has(c.hex) && c.lum > 30 && c.lum < 220);
 
@@ -115,35 +100,41 @@ export function autoAssignSlots(extractedColors) {
   const bestWarning = [...cols].sort((a, b) => warningScore(b) - warningScore(a))[0];
   const bestDanger = [...cols].sort((a, b) => dangerScore(b) - dangerScore(a))[0];
 
-  // Success: best green-ish, or a remaining mid-tone, or accent
+  // Success
   if (bestGreen && greenScore(bestGreen) > 5) {
-    colorSlots.success = bestGreen.hex;
+    brand.success = bestGreen.hex;
   } else if (remaining.length > 0) {
-    colorSlots.success = remaining[0]?.hex || accentHex;
+    brand.success = remaining[0]?.hex || accentHex;
   } else {
-    colorSlots.success = accentHex;
+    brand.success = accentHex;
   }
 
-  // Warning: best yellow/orange-ish, or a remaining mid-tone, or secondary
+  // Warning
   if (bestWarning && warningScore(bestWarning) > 5) {
-    colorSlots.warning = bestWarning.hex;
+    brand.warning = bestWarning.hex;
   } else if (remaining.length > 1) {
-    colorSlots.warning = remaining[1]?.hex || secondaryHex;
+    brand.warning = remaining[1]?.hex || secondaryHex;
   } else {
-    colorSlots.warning = secondaryHex;
+    brand.warning = secondaryHex;
   }
 
-  // Danger: best red-ish, or a remaining mid-tone, or primary
+  // Danger
   if (bestDanger && dangerScore(bestDanger) > 5) {
-    colorSlots.danger = bestDanger.hex;
+    brand.danger = bestDanger.hex;
   } else if (remaining.length > 2) {
-    colorSlots.danger = remaining[2]?.hex || primaryHex;
+    brand.danger = remaining[2]?.hex || primaryHex;
   } else {
-    colorSlots.danger = primaryHex;
+    brand.danger = primaryHex;
   }
 
   // Info = accent
-  colorSlots.info = accentHex;
+  brand.info = accentHex;
 
-  return colorSlots;
+  // Metadata: lightest and darkest extracted colors (useful for theme derivation)
+  const meta = {
+    lightestHex: (byLum[byLum.length - 1])?.hex || '#f0f0f0',
+    darkestHex: (byLum[0])?.hex || '#1a1a1a',
+  };
+
+  return { brand, meta };
 }

@@ -11,7 +11,7 @@ import { isLight, ha, darken, safeTextColor } from '../../services/colorUtils'
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
 
-const ds = computed(() => pipelineStore.DS)
+const ds = computed(() => pipelineStore.activeDS)
 const coverBg = computed(() => {
   const c = ds.value?.colors
   if (!c?.primary) return '#f5f5f5'
@@ -55,16 +55,16 @@ function t(obj) {
 
 const uiKitHTML = computed(() => {
   return buildUIKitHTML(
-    pipelineStore.DS,
+    pipelineStore.activeDS,
     pipelineStore.annotations,
     pipelineStore.analysisLog
   )
 })
 
 const fullJSONOutput = computed(() => {
-  if (!pipelineStore.DS?.colors) return pipelineStore.DS
+  if (!pipelineStore.activeDS?.colors) return pipelineStore.activeDS
   return getJSONOutput(
-    pipelineStore.DS,
+    pipelineStore.activeDS,
     pipelineStore.annotations,
     COMP_META,
     pipelineStore.extractedColors,
@@ -119,6 +119,12 @@ function copyJSON() {
     setTimeout(() => { copyLabel.value = '' }, 2000)
   })
 }
+
+// Theme tabs
+function setTheme(theme) {
+  pipelineStore.activeTheme = theme
+}
+
 </script>
 
 <template>
@@ -135,8 +141,30 @@ function copyJSON() {
         @click="startEditTitle"
       >
         <i class="fa-duotone fa-thin fa-pen" style="margin-right:4px;"></i>
-        Edit Title
+        {{ t(I.s7.editTitle) }}
       </button>
+    </div>
+
+    <!-- Theme Tab Bar -->
+    <div class="theme-bar" v-if="ds?.colors?.primary">
+      <div class="theme-tabs">
+        <button
+          class="theme-tab"
+          :class="{ 'theme-tab--active': pipelineStore.activeTheme === 'light' }"
+          @click="setTheme('light')"
+        >
+          <span style="font-size: 13px;">☀</span>
+          {{ t(I.s7.lightTab) }}
+        </button>
+        <button
+          class="theme-tab"
+          :class="{ 'theme-tab--active': pipelineStore.activeTheme === 'dark' }"
+          @click="setTheme('dark')"
+        >
+          <span style="font-size: 13px;">●</span>
+          {{ t(I.s7.darkTab) }}
+        </button>
+      </div>
     </div>
 
     <!-- Two-column layout: UI Kit + JSON Panel -->
@@ -422,6 +450,43 @@ function copyJSON() {
 </template>
 
 <style scoped>
+/* ── Theme Bar ── */
+.theme-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.theme-tabs {
+  display: flex;
+  gap: 4px;
+  background: #f0f0f0;
+  border-radius: 10px;
+  padding: 3px;
+}
+.theme-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #888;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.theme-tab:hover {
+  color: #555;
+  background: rgba(255,255,255,0.5);
+}
+.theme-tab--active {
+  background: #fff;
+  color: #333;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
 /* ── Cover Hero ── */
 .cover-hero {
   border-radius: 18px;
@@ -585,6 +650,15 @@ function copyJSON() {
     width: 100%;
     transform: rotate(6deg) scale(1.25);
     transform-origin: bottom right;
+  }
+
+  .theme-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .theme-tab {
+    padding: 7px 12px;
+    font-size: 12px;
   }
 
   .result-layout {

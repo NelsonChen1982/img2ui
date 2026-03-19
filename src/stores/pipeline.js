@@ -16,6 +16,7 @@ import {
 } from '../data/constants.js';
 import { autoAssignSlots } from '../services/autoAssignSlots.js';
 import { buildDS } from '../services/dsBuilder.js';
+import { deriveThemePair } from '../services/deriveThemePair.js';
 import { useSettingsStore } from './settings.js';
 
 export const usePipelineStore = defineStore('pipeline', () => {
@@ -24,9 +25,14 @@ export const usePipelineStore = defineStore('pipeline', () => {
   const imgDataUrl = ref(null); // Data URL of uploaded image
   const imgAvgLum = ref(128); // Average luminance of image
   const extractedColors = ref([]); // Colors extracted from image
-  const colorSlots = ref({}); // Semantic color slots (primary, secondary, etc.)
+  const colorSlots = ref({}); // Backward-compatible: points to active theme's slots
   const colorRoles = ref({}); // Legacy compatibility: color index → role
-  const DS = ref({}); // Design system object
+  const DS = ref({}); // Backward-compatible: points to active theme's DS
+  const lightColorSlots = ref({}); // Light theme color slots
+  const darkColorSlots = ref({}); // Dark theme color slots
+  const DS_light = ref({}); // Light design system
+  const DS_dark = ref({}); // Dark design system
+  const activeTheme = ref('light'); // 'light' | 'dark'
   const annotations = ref([]); // Array of annotation objects
   const activeType = ref(null); // Currently selected component type for annotation
   const drawing = ref(false); // Whether user is drawing annotation
@@ -101,6 +107,11 @@ export const usePipelineStore = defineStore('pipeline', () => {
     detectedFonts.value = [];
     holisticResult.value = null;
     DS.value = {};
+    DS_light.value = {};
+    DS_dark.value = {};
+    lightColorSlots.value = {};
+    darkColorSlots.value = {};
+    activeTheme.value = 'light';
     annotations.value = [];
     activeType.value = null;
     imgAvgLum.value = 128;
@@ -155,24 +166,31 @@ export const usePipelineStore = defineStore('pipeline', () => {
   }
 
   /**
-   * Auto-assign extracted colors to semantic slots
-   * Calls autoAssignSlots service and updates state
+   * Auto-assign extracted colors to brand slots, then derive Light/Dark palettes
    */
   function autoAssignSlots_action() {
     if (extractedColors.value.length === 0) return;
 
-    const slots = autoAssignSlots(extractedColors.value);
-    colorSlots.value = slots;
+    const { brand } = autoAssignSlots(extractedColors.value);
+    const themes = deriveThemePair(brand);
+    lightColorSlots.value = themes.light;
+    darkColorSlots.value = themes.dark;
+
+    // Initialize activeTheme from image luminance
+    activeTheme.value = imgAvgLum.value < 128 ? 'dark' : 'light';
+
+    // Backward-compatible aliases
+    colorSlots.value = activeTheme.value === 'dark' ? themes.dark : themes.light;
 
     // Legacy compatibility: track which color indices have roles
     colorRoles.value = {};
     const priIdx = extractedColors.value.findIndex(
-      (c) => c.hex === colorSlots.value.primary
+      (c) => c.hex === brand.primary
     );
     if (priIdx >= 0) colorRoles.value[priIdx] = 'primary';
 
     const secIdx = extractedColors.value.findIndex(
-      (c) => c.hex === colorSlots.value.secondary
+      (c) => c.hex === brand.secondary
     );
     if (secIdx >= 0) colorRoles.value[secIdx] = 'secondary';
   }
@@ -235,17 +253,29 @@ export const usePipelineStore = defineStore('pipeline', () => {
   }
 
   /**
-   * Build design system from current state
-   * Calls dsBuilder service with colorSlots, extractedColors, and imgAvgLum
+   * Build both Light and Dark design systems from current state
    */
   function buildDS_action() {
-    DS.value = buildDS(
-      colorSlots.value,
+    DS_light.value = buildDS(
+      lightColorSlots.value,
       extractedColors.value,
       imgAvgLum.value,
       null,
-      detectedFonts.value
+      detectedFonts.value,
+      false // forceIsDark=false for Light
     );
+    DS_light.value.name = uiKitName.value;
+    DS_dark.value = buildDS(
+      darkColorSlots.value,
+      extractedColors.value,
+      imgAvgLum.value,
+      null,
+      detectedFonts.value,
+      true // forceIsDark=true for Dark
+    );
+    DS_dark.value.name = uiKitName.value;
+    // Backward-compatible alias
+    DS.value = activeTheme.value === 'dark' ? DS_dark.value : DS_light.value;
   }
 
   /**
@@ -315,6 +345,20 @@ export const usePipelineStore = defineStore('pipeline', () => {
   }
 
   // Computed properties
+
+  /**
+   * Active design system based on activeTheme
+   */
+  const activeDS = computed(() => {
+    return activeTheme.value === 'dark' ? DS_dark.value : DS_light.value;
+  });
+
+  /**
+   * Active color slots based on activeTheme
+   */
+  const activeColorSlots = computed(() => {
+    return activeTheme.value === 'dark' ? darkColorSlots.value : lightColorSlots.value;
+  });
 
   /**
    * Current step index in STEP_MAP
@@ -390,6 +434,11 @@ export const usePipelineStore = defineStore('pipeline', () => {
     colorSlots,
     colorRoles,
     DS,
+    lightColorSlots,
+    darkColorSlots,
+    DS_light,
+    DS_dark,
+    activeTheme,
     annotations,
     activeType,
     drawing,
@@ -430,6 +479,8 @@ export const usePipelineStore = defineStore('pipeline', () => {
     setEmail,
 
     // Computed
+    activeDS,
+    activeColorSlots,
     currentStepIndex,
     canGoNext,
     annotationCount,
