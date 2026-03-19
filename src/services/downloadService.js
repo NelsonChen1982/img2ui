@@ -4,7 +4,7 @@
  */
 
 import { buildSemanticTokens, buildDS } from './dsBuilder.js';
-import { ha, isLight } from './colorUtils.js';
+import { ha, isLight, contrastRatio, relativeLuminance } from './colorUtils.js';
 
 /**
  * Generate the complete JSON output for the design system
@@ -46,158 +46,82 @@ export function getJSONOutput(
     annotatedGroups[a.typeId].push(a);
   }
 
-  // All components with full metadata + 4-level confidence
+  // Build components — only detected/annotated get full detail
   const ALL_IDS = Object.keys(COMP_META || {});
-  const components = {};
+  const detected = {};
+  const catalog = ALL_IDS.slice();
   let compConfidenceSum = 0;
 
   for (const tid of ALL_IDS) {
     const meta = COMP_META[tid];
-    const comp = {
-      description: meta.description || '',
-      anatomy: meta.anatomy || [],
-      variants: meta.variants || [],
-      sizes: meta.sizes || [],
-      states: meta.states || [],
-      baseClass: meta.baseClass || '',
-      sizeClasses: meta.sizeClasses || {},
-      variantClasses: meta.variantClasses || {},
-      stateRules: meta.stateRules || {},
-      usageRules: meta.usageRules || [],
-    };
-
-    // Merge annotation-analyzed styles if present
     const hasAnnotation = !!annotatedGroups[tid];
     const hasAIStyles = hasAnnotation && annotatedGroups[tid].some(a => a.aiCSS);
     const detectedInImage = detectedSet.has(tid);
 
-    if (hasAnnotation) {
-      const items = annotatedGroups[tid];
-      comp.annotated = true;
-      comp.annotationCount = items.length;
-      comp.analyzedStyles = items.map((a) => {
-        const obj = {};
-        if (a.aiCSS) {
-          const slots = { ...a.aiCSS };
-          if (slots.css) {
-            Object.assign(slots, slots.css);
-            delete slots.css;
-          }
-          obj.aiAnalyzed = slots;
-        }
-        if (a.visual) {
-          obj.pixelExtracted = {
-            bgColor: a.visual.bgColor || null,
-            fgColor: a.visual.fgColor || null,
-            inferredSize: a.visual.inferredSize || null,
-            estimatedRadius: a.visual.estimatedRadius || null,
-          };
-        }
-        return obj;
-      });
-    }
-
-    // 4-level confidence per component:
-    //   0.9  — annotated + AI-analyzed
-    //   0.7  — annotated (local pixel only) OR detected by holistic AI
-    //   0.4  — in schema but not seen in image, no annotation
-    //   0.2  — fallback minimum
+    // 4-level confidence
     let compConf;
     if (hasAIStyles) compConf = 0.9;
     else if (hasAnnotation || detectedInImage) compConf = 0.7;
     else compConf = 0.4;
-
-    comp.confidence = compConf;
-    comp.detectedInImage = detectedInImage || hasAnnotation;
     compConfidenceSum += compConf;
-    components[tid] = comp;
+
+    // Only include detected components (confidence >= 0.7) with full detail
+    if (compConf >= 0.7) {
+      const comp = {
+        description: meta.description || '',
+        confidence: compConf,
+      };
+      if (hasAnnotation) {
+        const items = annotatedGroups[tid];
+        comp.annotationCount = items.length;
+        comp.analyzedStyles = items.map((a) => {
+          const obj = {};
+          if (a.aiCSS) {
+            const slots = { ...a.aiCSS };
+            if (slots.css) {
+              Object.assign(slots, slots.css);
+              delete slots.css;
+            }
+            obj.aiAnalyzed = slots;
+          }
+          if (a.visual) {
+            obj.pixelExtracted = {
+              bgColor: a.visual.bgColor || null,
+              fgColor: a.visual.fgColor || null,
+              inferredSize: a.visual.inferredSize || null,
+              estimatedRadius: a.visual.estimatedRadius || null,
+            };
+          }
+          return obj;
+        });
+      }
+      detected[tid] = comp;
+    }
   }
 
   // Global confidence scores
   const hasColors = (allColors || []).length >= 3;
-  const hasAnnotations = (annotations || []).length > 0;
   const holisticConf = holistic?.confidence || 0;
+  const avgCompConf = ALL_IDS.length > 0 ? compConfidenceSum / ALL_IDS.length : 0;
   const confidence = {
     tokens: hasColors ? 0.85 : 0.5,
     semanticTokens: hasColors ? (holisticConf > 0.5 ? 0.8 : 0.7) : 0.4,
-    components:
-      ALL_IDS.length > 0
-        ? Math.round((compConfidenceSum / ALL_IDS.length) * 100) / 100
-        : 0,
+    components: Math.round(avgCompConf * 100) / 100,
     holistic: Math.round(holisticConf * 100) / 100,
     overall: Math.round(
-      ((hasColors ? 0.85 : 0.5) * 0.3 +
-        (ALL_IDS.length > 0 ? compConfidenceSum / ALL_IDS.length : 0) * 0.5 +
-        holisticConf * 0.2) * 100
+      ((hasColors ? 0.85 : 0.5) * 0.3 + avgCompConf * 0.5 + holisticConf * 0.2) * 100
     ) / 100,
   };
 
-  // Generate CSS variable block
-  const cssVariables = {
-    '--color-primary': colors.primary,
-    '--color-secondary': colors.secondary,
-    '--color-accent': colors.accent,
-    '--color-surface': colors.surface,
-    '--color-text': colors.text,
-    '--color-border': colors.border,
-    '--color-success': colors.success,
-    '--color-warning': colors.warning,
-    '--color-danger': colors.danger,
-    '--color-info': colors.info,
-    ...Object.fromEntries(Object.entries(semanticTokens).map(([k, v]) => [`--${k.replace(/\./g, '-')}`, v])),
-    '--font-heading': `'${fonts?.heading || 'Inter'}', sans-serif`,
-    '--font-body': `'${fonts?.body || 'Inter'}', sans-serif`,
-    '--radius-sm': radius.sm,
-    '--radius-md': radius.md,
-    '--radius-lg': radius.lg,
-    '--radius-xl': radius.xl,
-    '--radius-full': radius.full,
-    '--shadow-sm': shadows.sm,
-    '--shadow-md': shadows.md,
-    '--shadow-lg': shadows.lg,
-    ...Object.fromEntries((spacing || []).map((v, i) => [`--spacing-${i}`, `${v}px`])),
-  };
-
-  // Generate Tailwind config snippet
-  const tailwindConfig = {
-    theme: {
-      extend: {
-        colors: {
-          primary: colors.primary,
-          secondary: colors.secondary,
-          accent: colors.accent,
-          surface: colors.surface,
-          border: colors.border,
-          success: colors.success,
-          warning: colors.warning,
-          danger: colors.danger,
-          info: colors.info,
-        },
-        fontFamily: {
-          heading: [`'${fonts?.heading || 'Inter'}'`, 'sans-serif'],
-          body: [`'${fonts?.body || 'Inter'}'`, 'sans-serif'],
-        },
-        borderRadius: {
-          sm: radius.sm,
-          md: radius.md,
-          lg: radius.lg,
-          xl: radius.xl,
-        },
-        boxShadow: {
-          sm: shadows.sm,
-          md: shadows.md,
-          lg: shadows.lg,
-        },
-      },
-    },
-  };
-
   return {
-    name: DS.name || 'Custom Design System',
-    generatedBy: 'img2ui',
-    version: '0.1.0',
+    meta: {
+      name: DS.name || 'Custom Design System',
+      generatedBy: 'img2ui',
+      version: '0.2.0',
+      date: new Date().toISOString().slice(0, 10),
+      cssFramework,
+    },
     mode: isDark ? 'dark' : 'light',
-    cssFramework,
     tokens: {
       colors: {
         primary: colors.primary,
@@ -218,9 +142,10 @@ export function getJSONOutput(
         bodyStack: `'${fonts?.body || 'Inter'}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
       },
       typography: typo,
-      palette: allColors || [],
-      paletteRatios:
-        (colorRatios || []).map((r) => Math.round(r * 100) / 100) || [],
+      extractedPalette: (allColors || []).map((hex, i) => ({
+        hex,
+        ratio: Math.round((colorRatios?.[i] || 0) * 100) / 100,
+      })),
       spacing,
       radius,
       shadows,
@@ -228,9 +153,10 @@ export function getJSONOutput(
     semanticTokens,
     styleProfile: holistic?.styleProfile || null,
     globalHints: holistic?.globalHints || null,
-    cssVariables,
-    tailwindConfig,
-    components,
+    components: {
+      detected,
+      catalog,
+    },
     confidence,
     analysis: {
       aiAnalyzed: aiCount,
@@ -324,185 +250,165 @@ export function downloadJSON(
 }
 
 /**
- * Download design system as SKILL.md (agent-readable markdown)
- * @param {Object} DS - Design system object
- * @param {Array} annotations - Annotations array
- * @param {string} lang - Language (en, zh, ja)
- * @param {Object} COMP_META - Component metadata
- * @param {Array} extractedColors - Extracted colors
- * @param {string} cssFramework - CSS framework selection
- * @returns {void}
+ * Generate gotchas from design system properties
+ * @param {Object} DS - Design system
+ * @param {Object} semanticTokens - Derived semantic tokens
+ * @param {Object|null} holistic - Holistic AI analysis
+ * @param {string} lang - Language
+ * @returns {string[]}
  */
-export function downloadSKILL(
-  DS,
-  annotations,
-  lang,
-  COMP_META,
-  extractedColors,
-  cssFramework,
-  holisticResult
-) {
-  if (!DS?.colors) {
-    alert('Complete pipeline first');
-    return;
+function generateGotchas(DS, semanticTokens, holistic, lang) {
+  const { colors, isDark, radius, fonts, shadows } = DS;
+  const g = [];
+  const L = lang || 'en';
+
+  // 1. Primary contrast on surface
+  const priContrast = contrastRatio(colors.primary, colors.surface);
+  if (priContrast < 4.5) {
+    if (L === 'zh') g.push(`Primary (${colors.primary}) 在 surface (${colors.surface}) 上對比度僅 ${priContrast.toFixed(1)}:1 — 小字需使用更深的替代色或加粗`);
+    else if (L === 'ja') g.push(`Primary (${colors.primary}) と surface (${colors.surface}) のコントラスト比 ${priContrast.toFixed(1)}:1 — 小文字には代替色か太字を使用`);
+    else g.push(`Primary (${colors.primary}) on surface (${colors.surface}) has only ${priContrast.toFixed(1)}:1 contrast — use bolder weight or darker shade for small text`);
   }
 
-  const { colors, allColors, isDark, typo, spacing, radius, shadows, fonts } = DS;
-  const fw = cssFramework || 'tailwind';
-  const holistic = holisticResult || null;
-  const fwLabel =
-    {
-      tailwind: 'Tailwind CSS',
-      vanilla: 'Vanilla CSS',
-      cssvar: 'CSS Custom Properties (Variables)',
-    }[fw] || 'Tailwind CSS';
+  // 2. text.onAction contrast check
+  if (isLight(colors.primary)) {
+    if (L === 'zh') g.push(`Primary 色偏亮 — 按鈕文字必須用 text.onAction (${semanticTokens['text.onAction']})，不要用白色`);
+    else if (L === 'ja') g.push(`Primary色が明るい — ボタンテキストは text.onAction (${semanticTokens['text.onAction']}) を使用、白色禁止`);
+    else g.push(`Primary is light — button text MUST use text.onAction (${semanticTokens['text.onAction']}), not white`);
+  }
 
+  // 3. Border vs surface similarity
+  const borderLum = relativeLuminance(colors.border);
+  const surfaceLum = relativeLuminance(colors.surface);
+  if (Math.abs(borderLum - surfaceLum) < 0.06) {
+    if (L === 'zh') g.push(`Border (${colors.border}) 與 surface 非常接近 — 不要只靠邊框區隔，改用陰影或間距`);
+    else if (L === 'ja') g.push(`Border (${colors.border}) と surface が近すぎる — 境界線だけで区切らず、影や間隔を使用`);
+    else g.push(`Border (${colors.border}) is very close to surface — use shadows or spacing as primary dividers, not borders alone`);
+  }
+
+  // 4. Dark mode elevation direction
+  if (isDark) {
+    if (L === 'zh') g.push(`深色主題：elevated 表面要比 surface 更亮（不是更暗）。不要使用純黑 #000`);
+    else if (L === 'ja') g.push(`ダークテーマ：elevated surfaceはsurfaceより明るくする。純黒 #000 禁止`);
+    else g.push(`Dark theme: elevated surfaces must be LIGHTER than surface, not darker. Never use pure black #000`);
+  }
+
+  // 5. Non-default font reminder
+  const headingFont = fonts?.heading || 'Inter';
+  const bodyFont = fonts?.body || 'Inter';
+  if (headingFont !== 'Inter' || bodyFont !== 'Inter') {
+    const fontList = [...new Set([headingFont, bodyFont].filter(f => f !== 'Inter'))].join(' + ');
+    if (L === 'zh') g.push(`使用 ${fontList} 字體 — 不要 fallback 到 Inter 或系統字體，必須載入 Google Fonts`);
+    else if (L === 'ja') g.push(`${fontList} フォント使用 — Inter やシステムフォントにフォールバックしないこと。Google Fontsインポート必須`);
+    else g.push(`Uses ${fontList} — do NOT fall back to Inter or system fonts. Google Fonts import required`);
+  }
+
+  // 6. Radius extremes
+  const radiusMd = parseInt(radius.md);
+  if (radiusMd >= 16) {
+    if (L === 'zh') g.push(`大圓角設計 (md=${radius.md}) — 小元素如 badge、tag 也需可見圓角`);
+    else if (L === 'ja') g.push(`大きな角丸 (md=${radius.md}) — badge、tagなどの小要素にも角丸を適用`);
+    else g.push(`Large radius design (md=${radius.md}) — even small elements like badges and tags need visible rounding`);
+  } else if (radiusMd <= 3) {
+    if (L === 'zh') g.push(`銳角設計 (md=${radius.md}) — 幾何風格，避免過度圓角，只在 pill 按鈕用 full`);
+    else if (L === 'ja') g.push(`シャープコーナー (md=${radius.md}) — 幾何学的デザイン。fullはpillボタンのみ`);
+    else g.push(`Sharp corners (md=${radius.md}) — geometric style, avoid rounding except radius.full for pills`);
+  }
+
+  // 7. Flat design — minimize shadows
+  if (holistic?.styleProfile?.elevation === 'flat') {
+    if (L === 'zh') g.push(`扁平設計 — 盡量少用陰影，改用邊框和色彩變化來表達層次`);
+    else if (L === 'ja') g.push(`フラットデザイン — 影を最小限に。境界線と色の変化で深度を表現`);
+    else g.push(`Flat design — minimize shadows. Use borders and color changes for depth instead`);
+  }
+
+  // 8. Dense layout
+  if (holistic?.styleProfile?.density === 'compact') {
+    if (L === 'zh') g.push(`緊湊佈局 — 使用小間距（spacing 0-3），不要加額外 padding`);
+    else if (L === 'ja') g.push(`コンパクトレイアウト — 小さなスペーシング（0-3）を使用。余分なpaddingを追加しない`);
+    else g.push(`Compact layout — use smaller spacing values (indices 0-3). Don't add extra padding`);
+  }
+
+  // 9. Info === Accent
+  if (colors.info === colors.accent) {
+    if (L === 'zh') g.push(`Info 色 = Accent 色 (${colors.info}) — info alert 和裝飾元素共用同一顏色`);
+    else if (L === 'ja') g.push(`Info色 = Accent色 (${colors.info}) — infoアラートと装飾要素が同色`);
+    else g.push(`Info color equals accent (${colors.info}) — info alerts and decorative elements share the same color`);
+  }
+
+  return g;
+}
+
+/**
+ * Generate Style DNA description from holistic AI analysis
+ */
+function generateStyleDNA(holistic, isDark, lang) {
+  const L = lang || 'en';
+  if (!holistic?.styleProfile) {
+    if (L === 'zh') return isDark ? '深色主題設計系統。' : '亮色主題設計系統。';
+    if (L === 'ja') return isDark ? 'ダークテーマのデザインシステム。' : 'ライトテーマのデザインシステム。';
+    return isDark ? 'Dark theme design system.' : 'Light theme design system.';
+  }
+  const sp = holistic.styleProfile;
+  const gh = holistic.globalHints || {};
+
+  const moodMap = { corporate: 'professional/corporate', playful: 'playful/friendly', minimal: 'clean/minimal', bold: 'bold/impactful', elegant: 'refined/elegant' };
+  const moodZh = { corporate: '專業/企業風', playful: '活潑/親切', minimal: '簡潔/極簡', bold: '大膽/衝擊', elegant: '精緻/優雅' };
+  const moodJa = { corporate: 'プロフェッショナル', playful: '親しみやすい', minimal: 'ミニマル', bold: '大胆', elegant: 'エレガント' };
+
+  const mood = L === 'zh' ? (moodZh[sp.mood] || sp.mood) : L === 'ja' ? (moodJa[sp.mood] || sp.mood) : (moodMap[sp.mood] || sp.mood);
+  const shape = sp.borderStyle === 'rounded' ? (L === 'zh' ? '圓角' : L === 'ja' ? '丸みのある' : 'rounded') : (L === 'zh' ? '銳角' : L === 'ja' ? 'シャープ' : 'sharp');
+  const depth = sp.elevation === 'flat' ? (L === 'zh' ? '扁平' : L === 'ja' ? 'フラット' : 'flat') : sp.elevation === 'heavy-shadow' ? (L === 'zh' ? '強陰影' : L === 'ja' ? '強い影' : 'heavy shadows') : (L === 'zh' ? '微陰影' : L === 'ja' ? '微妙な影' : 'subtle shadows');
+  const density = sp.density === 'compact' ? (L === 'zh' ? '緊湊' : L === 'ja' ? 'コンパクト' : 'compact') : sp.density === 'spacious' ? (L === 'zh' ? '寬鬆' : L === 'ja' ? 'ゆったり' : 'spacious') : (L === 'zh' ? '適中' : L === 'ja' ? '標準的' : 'normal');
+
+  if (L === 'zh') return `${mood}風格，${shape}造型，${density}密度，${depth}深度。${gh.layoutStyle ? `佈局：${gh.layoutStyle}。` : ''}`;
+  if (L === 'ja') return `${mood}スタイル、${shape}フォルム、${density}密度、${depth}深度。${gh.layoutStyle ? `レイアウト：${gh.layoutStyle}。` : ''}`;
+  return `${mood[0].toUpperCase() + mood.slice(1)} style with ${shape} shapes, ${density} density, and ${depth} for depth.${gh.layoutStyle ? ` Layout: ${gh.layoutStyle}.` : ''}`;
+}
+
+/**
+ * Build tokens reference markdown (full tables)
+ */
+function buildTokensReference(DS, lang) {
+  const { colors, isDark, typo, spacing, radius, shadows, fonts } = DS;
   const semanticTokens = buildSemanticTokens(colors, isDark);
   const headingFont = fonts?.heading || 'Inter';
   const bodyFont = fonts?.body || 'Inter';
-
-  // ── Build the complete SKILL.md content ──
   const L = lang || 'en';
   const lines = [];
 
-  // ─── HEADER ───
-  lines.push(`# img2ui — Design System Skill`);
-  lines.push(``);
-  if (L === 'zh') {
-    lines.push(`> 從參考圖片萃取的完整 Design System 規範，供 AI coding agent 直接使用於產生元件。`);
-    lines.push(`> **所有色碼、字體、間距、圓角、陰影皆為從圖片分析得來的精確值，請嚴格遵守。**`);
-  } else if (L === 'ja') {
-    lines.push(`> 参照画像から抽出した完全なデザインシステム仕様。AIコーディングエージェントがコンポーネント生成に直接使用。`);
-    lines.push(`> **全ての色、フォント、間隔、角丸、影は画像分析から得た正確な値です。厳密に遵守してください。**`);
-  } else {
-    lines.push(`> Complete Design System specification extracted from a reference image, ready for AI coding agents.`);
-    lines.push(`> **All color codes, fonts, spacing, radius, and shadow values are precise values analyzed from the image. Follow them strictly.**`);
-  }
-  lines.push(``);
-  lines.push(`- **Mode:** ${isDark ? 'Dark' : 'Light'}`);
-  lines.push(`- **CSS Framework:** ${fwLabel}`);
-  lines.push(`- **Generated:** ${new Date().toISOString().slice(0, 10)}`);
-  lines.push(``);
-
-  // ─── STYLE PROFILE (from holistic AI analysis) ───
-  if (holistic?.styleProfile) {
-    const sp = holistic.styleProfile;
-    const gh = holistic.globalHints || {};
-    lines.push(`### Style Profile`);
-    lines.push(``);
-    lines.push(`| Aspect | Value |`);
-    lines.push(`|--------|-------|`);
-    lines.push(`| Border Style | ${sp.borderStyle} |`);
-    lines.push(`| Density | ${sp.density} |`);
-    lines.push(`| Mood | ${sp.mood} |`);
-    lines.push(`| Elevation | ${sp.elevation} |`);
-    lines.push(`| Colorfulness | ${sp.colorfulness} |`);
-    if (gh.layoutStyle) lines.push(`| Layout | ${gh.layoutStyle} |`);
-    if (gh.primaryUsage) lines.push(`| Primary Color Usage | ${gh.primaryUsage} |`);
-    lines.push(``);
-  }
-
-  // ─── HOW TO USE ───
-  lines.push(`---`);
-  lines.push(``);
-  lines.push(L === 'zh' ? `## 使用方式` : L === 'ja' ? `## 使用方法` : `## How to Use`);
-  lines.push(``);
-  if (L === 'zh') {
-    lines.push(`1. 將此檔案放在專案根目錄的 \`.claude/skills/\` 或 \`.cursorrules\` 或 \`codex.md\``);
-    lines.push(`2. 在 agent 指令中加入：「請嚴格依照 SKILL.md 的 Design System 來實作所有 UI 元件」`);
-    lines.push(`3. Agent 會根據下方的 token 值、元件結構、視覺參數自動產生對應元件`);
-    lines.push(`4. **不要猜測值** — 所有顏色、字體、間距請使用下方明確定義的值`);
-  } else if (L === 'ja') {
-    lines.push(`1. このファイルを \`.claude/skills/\` または \`.cursorrules\` または \`codex.md\` に配置`);
-    lines.push(`2. エージェントに指示：「SKILL.mdのデザインシステムに厳密に従ってUI実装して」`);
-    lines.push(`3. 以下のトークン値・コンポーネント構造・視覚パラメータに基づいて自動生成`);
-    lines.push(`4. **値を推測しないこと** — 全ての色・フォント・間隔は以下の定義値を使用`);
-  } else {
-    lines.push(`1. Place this file in \`.claude/skills/\` or \`.cursorrules\` or \`codex.md\``);
-    lines.push(`2. Instruct the agent: "Strictly follow the Design System in SKILL.md for all UI implementation"`);
-    lines.push(`3. The agent will use the token values, component structures, and visual parameters below`);
-    lines.push(`4. **Do NOT guess values** — use the exact colors, fonts, spacing defined below`);
-  }
-  lines.push(``);
-
-  // ─── SECTION 1: DESIGN TOKENS ───
-  lines.push(`---`);
-  lines.push(``);
-  lines.push(`## 1. Design Tokens`);
+  lines.push(`# Design Tokens Reference`);
   lines.push(``);
 
   // Colors
-  lines.push(`### 1.1 Colors`);
+  lines.push(`## Colors`);
   lines.push(``);
   lines.push(`| Token | Hex | Usage |`);
   lines.push(`|-------|-----|-------|`);
-  lines.push(`| \`primary\` | \`${colors.primary}\` | Main brand color, CTA buttons, active states |`);
-  lines.push(`| \`secondary\` | \`${colors.secondary}\` | Secondary actions, accents |`);
-  lines.push(`| \`accent\` | \`${colors.accent}\` | Highlights, decorative elements |`);
-  lines.push(`| \`surface\` | \`${colors.surface}\` | Page background, card backgrounds |`);
-  lines.push(`| \`text\` | \`${colors.text}\` | Primary text color |`);
-  lines.push(`| \`border\` | \`${colors.border}\` | Borders, dividers |`);
-  lines.push(`| \`success\` | \`${colors.success}\` | Success states, confirmations |`);
-  lines.push(`| \`warning\` | \`${colors.warning}\` | Warning states, caution |`);
-  lines.push(`| \`danger\` | \`${colors.danger}\` | Error states, destructive actions |`);
-  lines.push(`| \`info\` | \`${colors.info}\` | Informational states |`);
+  lines.push(`| primary | \`${colors.primary}\` | Main brand color, CTA buttons |`);
+  lines.push(`| secondary | \`${colors.secondary}\` | Secondary actions |`);
+  lines.push(`| accent | \`${colors.accent}\` | Highlights, decorative |`);
+  lines.push(`| surface | \`${colors.surface}\` | Page/card backgrounds |`);
+  lines.push(`| text | \`${colors.text}\` | Primary text |`);
+  lines.push(`| border | \`${colors.border}\` | Borders, dividers |`);
+  lines.push(`| success | \`${colors.success}\` | Success states |`);
+  lines.push(`| warning | \`${colors.warning}\` | Warning states |`);
+  lines.push(`| danger | \`${colors.danger}\` | Error states |`);
+  lines.push(`| info | \`${colors.info}\` | Informational |`);
   lines.push(``);
-
-  // Full palette
-  if (allColors && allColors.length > 0) {
-    lines.push(`**Full Palette (by frequency):**`);
-    lines.push(``);
-    lines.push((allColors || []).map((hex, i) => {
-      const pct = DS.colorRatios?.[i] ? Math.round(DS.colorRatios[i] * 100) + '%' : '';
-      return `\`${hex}\`${pct ? ' (' + pct + ')' : ''}`;
-    }).join(' · '));
-    lines.push(``);
-  }
 
   // Semantic tokens
-  lines.push(`### 1.2 Semantic Tokens`);
+  lines.push(`## Semantic Tokens`);
   lines.push(``);
-  lines.push(L === 'zh'
-    ? `> 這些語意化 token 是從基礎色衍生的，用於特定 UI 場景。`
-    : L === 'ja'
-      ? `> 基本色から派生したセマンティックトークン。特定のUIシーンで使用。`
-      : `> Derived from base colors for specific UI contexts. Use these instead of raw colors.`
-  );
-  lines.push(``);
-  lines.push(`| Token | Value | When to use |`);
-  lines.push(`|-------|-------|-------------|`);
-  lines.push(`| \`bg.page\` | \`${semanticTokens['bg.page']}\` | Main page background |`);
-  lines.push(`| \`bg.card\` | \`${semanticTokens['bg.card']}\` | Card, dialog backgrounds |`);
-  lines.push(`| \`bg.elevated\` | \`${semanticTokens['bg.elevated']}\` | Elevated surfaces (dropdown, tooltip) |`);
-  lines.push(`| \`bg.sunken\` | \`${semanticTokens['bg.sunken']}\` | Inset areas, code blocks |`);
-  lines.push(`| \`bg.overlay\` | \`${semanticTokens['bg.overlay']}\` | Modal overlay backdrop |`);
-  lines.push(`| \`text.primary\` | \`${semanticTokens['text.primary']}\` | Main body text |`);
-  lines.push(`| \`text.secondary\` | \`${semanticTokens['text.secondary']}\` | Subtitles, helper text |`);
-  lines.push(`| \`text.disabled\` | \`${semanticTokens['text.disabled']}\` | Disabled labels |`);
-  lines.push(`| \`text.inverse\` | \`${semanticTokens['text.inverse']}\` | Text on dark/light inverse bg |`);
-  lines.push(`| \`text.onAction\` | \`${semanticTokens['text.onAction']}\` | Text on primary-colored buttons |`);
-  lines.push(`| \`border.default\` | \`${semanticTokens['border.default']}\` | Default border color |`);
-  lines.push(`| \`border.strong\` | \`${semanticTokens['border.strong']}\` | Emphasized borders |`);
-  lines.push(`| \`border.focus\` | \`${semanticTokens['border.focus']}\` | Focus ring color |`);
-  lines.push(`| \`action.primary\` | \`${semanticTokens['action.primary']}\` | Primary button bg |`);
-  lines.push(`| \`action.primaryHover\` | \`${semanticTokens['action.primaryHover']}\` | Primary button hover |`);
-  lines.push(`| \`action.secondary\` | \`${semanticTokens['action.secondary']}\` | Secondary button bg |`);
-  lines.push(`| \`action.disabled\` | \`${semanticTokens['action.disabled']}\` | Disabled button bg |`);
-  lines.push(`| \`state.success\` | \`${semanticTokens['state.success']}\` | Success feedback |`);
-  lines.push(`| \`state.warning\` | \`${semanticTokens['state.warning']}\` | Warning feedback |`);
-  lines.push(`| \`state.danger\` | \`${semanticTokens['state.danger']}\` | Error feedback |`);
-  lines.push(`| \`state.info\` | \`${semanticTokens['state.info']}\` | Info feedback |`);
+  lines.push(`| Token | Value | Usage |`);
+  lines.push(`|-------|-------|-------|`);
+  for (const [k, v] of Object.entries(semanticTokens)) {
+    lines.push(`| ${k} | \`${v}\` | |`);
+  }
   lines.push(``);
 
   // Typography
-  lines.push(`### 1.3 Typography`);
-  lines.push(``);
-  lines.push(`| Font Role | Family | Google Fonts Import |`);
-  lines.push(`|-----------|--------|---------------------|`);
-  lines.push(`| Heading (Display, H1, H2) | \`${headingFont}\` | \`@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(headingFont)}:wght@400;500;600;700;800&display=swap')\` |`);
-  lines.push(`| Body (Body, Small, Caption) | \`${bodyFont}\` | \`@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(bodyFont)}:wght@400;500;600;700&display=swap')\` |`);
-  lines.push(``);
-  lines.push(`**Type Scale:**`);
+  lines.push(`## Typography`);
   lines.push(``);
   lines.push(`| Level | Size | Weight | Line Height | Font |`);
   lines.push(`|-------|------|--------|-------------|------|`);
@@ -513,327 +419,361 @@ export function downloadSKILL(
   lines.push(``);
 
   // Spacing
-  lines.push(`### 1.4 Spacing Scale`);
+  lines.push(`## Spacing`);
   lines.push(``);
-  lines.push(`| Index | Value | Common Use |`);
-  lines.push(`|-------|-------|-----------|`);
-  const spacingLabels = ['Hairline gap', 'Icon gap', 'Form field gap', 'Section padding', 'Card padding', 'Group gap', 'Section gap', 'Page margin'];
+  const spacingLabels = ['Hairline', 'Icon gap', 'Field gap', 'Section pad', 'Card pad', 'Group gap', 'Section gap', 'Page margin'];
   (spacing || []).forEach((v, i) => {
-    lines.push(`| ${i} | \`${v}px\` | ${spacingLabels[i] || ''} |`);
+    lines.push(`- ${i}: \`${v}px\` — ${spacingLabels[i] || ''}`);
   });
   lines.push(``);
 
-  // Radius
-  lines.push(`### 1.5 Border Radius`);
+  // Radius + Shadows
+  lines.push(`## Radius`);
   lines.push(``);
-  lines.push(`| Token | Value | Usage |`);
-  lines.push(`|-------|-------|-------|`);
-  lines.push(`| \`sm\` | \`${radius.sm}\` | Badges, small buttons, tags |`);
-  lines.push(`| \`md\` | \`${radius.md}\` | Buttons, inputs, cards |`);
-  lines.push(`| \`lg\` | \`${radius.lg}\` | Cards, dialogs, modals |`);
-  lines.push(`| \`xl\` | \`${radius.xl}\` | Hero sections, large containers |`);
-  lines.push(`| \`full\` | \`${radius.full}\` | Pill buttons, avatars, badges |`);
+  lines.push(`sm: ${radius.sm} · md: ${radius.md} · lg: ${radius.lg} · xl: ${radius.xl} · full: ${radius.full}`);
   lines.push(``);
-
-  // Shadows
-  lines.push(`### 1.6 Shadows`);
+  lines.push(`## Shadows`);
   lines.push(``);
-  lines.push(`| Token | Value | Usage |`);
-  lines.push(`|-------|-------|-------|`);
-  lines.push(`| \`sm\` | \`${shadows.sm}\` | Cards, subtle elevation |`);
-  lines.push(`| \`md\` | \`${shadows.md}\` | Dropdowns, popovers |`);
-  lines.push(`| \`lg\` | \`${shadows.lg}\` | Modals, toasts, floating elements |`);
+  lines.push(`- sm: \`${shadows.sm}\``);
+  lines.push(`- md: \`${shadows.md}\``);
+  lines.push(`- lg: \`${shadows.lg}\``);
   lines.push(``);
 
-  // ─── SECTION 2: FRAMEWORK-SPECIFIC CODE ───
-  lines.push(`---`);
-  lines.push(``);
-  lines.push(`## 2. Ready-to-Use Code`);
-  lines.push(``);
+  return lines.join('\n');
+}
 
-  if (fw === 'cssvar' || fw === 'vanilla') {
-    lines.push(`### CSS Custom Properties`);
-    lines.push(``);
-    lines.push('```css');
-    lines.push(`:root {`);
-    lines.push(`  /* Colors */`);
-    lines.push(`  --color-primary: ${colors.primary};`);
-    lines.push(`  --color-secondary: ${colors.secondary};`);
-    lines.push(`  --color-accent: ${colors.accent};`);
-    lines.push(`  --color-surface: ${colors.surface};`);
-    lines.push(`  --color-text: ${colors.text};`);
-    lines.push(`  --color-border: ${colors.border};`);
-    lines.push(`  --color-success: ${colors.success};`);
-    lines.push(`  --color-warning: ${colors.warning};`);
-    lines.push(`  --color-danger: ${colors.danger};`);
-    lines.push(`  --color-info: ${colors.info};`);
-    lines.push(``);
-    lines.push(`  /* Semantic */`);
-    Object.entries(semanticTokens).forEach(([k, v]) => {
-      lines.push(`  --${k.replace(/\./g, '-')}: ${v};`);
-    });
-    lines.push(``);
-    lines.push(`  /* Typography */`);
-    lines.push(`  --font-heading: '${headingFont}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;`);
-    lines.push(`  --font-body: '${bodyFont}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;`);
-    lines.push(``);
-    lines.push(`  /* Spacing */`);
-    (spacing || []).forEach((v, i) => {
-      lines.push(`  --spacing-${i}: ${v}px;`);
-    });
-    lines.push(``);
-    lines.push(`  /* Radius */`);
-    lines.push(`  --radius-sm: ${radius.sm};`);
-    lines.push(`  --radius-md: ${radius.md};`);
-    lines.push(`  --radius-lg: ${radius.lg};`);
-    lines.push(`  --radius-xl: ${radius.xl};`);
-    lines.push(`  --radius-full: ${radius.full};`);
-    lines.push(``);
-    lines.push(`  /* Shadows */`);
-    lines.push(`  --shadow-sm: ${shadows.sm};`);
-    lines.push(`  --shadow-md: ${shadows.md};`);
-    lines.push(`  --shadow-lg: ${shadows.lg};`);
-    lines.push(`}`);
-    lines.push('```');
-    lines.push(``);
+/**
+ * Build CSS custom properties block
+ */
+function buildTokensCSS(DS) {
+  const { colors, isDark, typo, spacing, radius, shadows, fonts } = DS;
+  const semanticTokens = buildSemanticTokens(colors, isDark);
+  const lines = [':root {'];
+  lines.push(`  /* Colors */`);
+  for (const [k, v] of Object.entries(colors)) {
+    lines.push(`  --color-${k}: ${v};`);
   }
-
-  if (fw === 'tailwind') {
-    lines.push(`### tailwind.config.js`);
-    lines.push(``);
-    lines.push('```js');
-    lines.push(`/** @type {import('tailwindcss').Config} */`);
-    lines.push(`export default {`);
-    lines.push(`  theme: {`);
-    lines.push(`    extend: {`);
-    lines.push(`      colors: {`);
-    lines.push(`        primary: '${colors.primary}',`);
-    lines.push(`        secondary: '${colors.secondary}',`);
-    lines.push(`        accent: '${colors.accent}',`);
-    lines.push(`        surface: '${colors.surface}',`);
-    lines.push(`        border: '${colors.border}',`);
-    lines.push(`        success: '${colors.success}',`);
-    lines.push(`        warning: '${colors.warning}',`);
-    lines.push(`        danger: '${colors.danger}',`);
-    lines.push(`        info: '${colors.info}',`);
-    lines.push(`      },`);
-    lines.push(`      textColor: {`);
-    lines.push(`        DEFAULT: '${colors.text}',`);
-    lines.push(`        secondary: '${semanticTokens['text.secondary']}',`);
-    lines.push(`        disabled: '${semanticTokens['text.disabled']}',`);
-    lines.push(`        inverse: '${semanticTokens['text.inverse']}',`);
-    lines.push(`        onAction: '${semanticTokens['text.onAction']}',`);
-    lines.push(`      },`);
-    lines.push(`      backgroundColor: {`);
-    lines.push(`        page: '${semanticTokens['bg.page']}',`);
-    lines.push(`        card: '${semanticTokens['bg.card']}',`);
-    lines.push(`        elevated: '${semanticTokens['bg.elevated']}',`);
-    lines.push(`        sunken: '${semanticTokens['bg.sunken']}',`);
-    lines.push(`        overlay: '${semanticTokens['bg.overlay']}',`);
-    lines.push(`      },`);
-    lines.push(`      fontFamily: {`);
-    lines.push(`        heading: ['${headingFont}', 'sans-serif'],`);
-    lines.push(`        body: ['${bodyFont}', 'sans-serif'],`);
-    lines.push(`      },`);
-    lines.push(`      borderRadius: {`);
-    lines.push(`        sm: '${radius.sm}',`);
-    lines.push(`        DEFAULT: '${radius.md}',`);
-    lines.push(`        lg: '${radius.lg}',`);
-    lines.push(`        xl: '${radius.xl}',`);
-    lines.push(`      },`);
-    lines.push(`      boxShadow: {`);
-    lines.push(`        sm: '${shadows.sm}',`);
-    lines.push(`        DEFAULT: '${shadows.md}',`);
-    lines.push(`        lg: '${shadows.lg}',`);
-    lines.push(`      },`);
-    lines.push(`      spacing: {`);
-    (spacing || []).forEach((v, i) => {
-      lines.push(`        '${i}': '${v}px',`);
-    });
-    lines.push(`      },`);
-    lines.push(`    },`);
-    lines.push(`  },`);
-    lines.push(`}`);
-    lines.push('```');
-    lines.push(``);
+  lines.push(``);
+  lines.push(`  /* Semantic */`);
+  for (const [k, v] of Object.entries(semanticTokens)) {
+    lines.push(`  --${k.replace(/\./g, '-')}: ${v};`);
   }
+  lines.push(``);
+  lines.push(`  /* Typography */`);
+  lines.push(`  --font-heading: '${fonts?.heading || 'Inter'}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;`);
+  lines.push(`  --font-body: '${fonts?.body || 'Inter'}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;`);
+  lines.push(``);
+  lines.push(`  /* Spacing */`);
+  (spacing || []).forEach((v, i) => lines.push(`  --spacing-${i}: ${v}px;`));
+  lines.push(``);
+  lines.push(`  /* Radius */`);
+  for (const [k, v] of Object.entries(radius)) {
+    lines.push(`  --radius-${k}: ${v};`);
+  }
+  lines.push(``);
+  lines.push(`  /* Shadows */`);
+  for (const [k, v] of Object.entries(shadows)) {
+    lines.push(`  --shadow-${k}: ${v};`);
+  }
+  lines.push('}');
+  return lines.join('\n');
+}
 
-  // All frameworks: also show CSS import for fonts
-  lines.push(`### Font Import`);
-  lines.push(``);
-  lines.push('```html');
-  const fontFamilies = [...new Set([headingFont, bodyFont])];
-  const fontUrl = `https://fonts.googleapis.com/css2?${fontFamilies.map(f => `family=${encodeURIComponent(f)}:wght@400;500;600;700;800`).join('&')}&display=swap`;
-  lines.push(`<link rel="preconnect" href="https://fonts.googleapis.com">`);
-  lines.push(`<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>`);
-  lines.push(`<link href="${fontUrl}" rel="stylesheet">`);
-  lines.push('```');
-  lines.push(``);
+/**
+ * Build Tailwind config extension
+ */
+function buildTailwindConfigJS(DS) {
+  const { colors, isDark, radius, shadows, spacing, fonts } = DS;
+  const semanticTokens = buildSemanticTokens(colors, isDark);
+  return `/** @type {import('tailwindcss').Config} */
+export default {
+  theme: {
+    extend: {
+      colors: {
+        primary: '${colors.primary}',
+        secondary: '${colors.secondary}',
+        accent: '${colors.accent}',
+        surface: '${colors.surface}',
+        border: '${colors.border}',
+        success: '${colors.success}',
+        warning: '${colors.warning}',
+        danger: '${colors.danger}',
+        info: '${colors.info}',
+      },
+      textColor: {
+        DEFAULT: '${colors.text}',
+        secondary: '${semanticTokens['text.secondary']}',
+        disabled: '${semanticTokens['text.disabled']}',
+        inverse: '${semanticTokens['text.inverse']}',
+        onAction: '${semanticTokens['text.onAction']}',
+      },
+      backgroundColor: {
+        page: '${semanticTokens['bg.page']}',
+        card: '${semanticTokens['bg.card']}',
+        elevated: '${semanticTokens['bg.elevated']}',
+        sunken: '${semanticTokens['bg.sunken']}',
+        overlay: '${semanticTokens['bg.overlay']}',
+      },
+      fontFamily: {
+        heading: ['${fonts?.heading || 'Inter'}', 'sans-serif'],
+        body: ['${fonts?.body || 'Inter'}', 'sans-serif'],
+      },
+      borderRadius: {
+        sm: '${radius.sm}',
+        DEFAULT: '${radius.md}',
+        lg: '${radius.lg}',
+        xl: '${radius.xl}',
+      },
+      boxShadow: {
+        sm: '${shadows.sm}',
+        DEFAULT: '${shadows.md}',
+        lg: '${shadows.lg}',
+      },
+      spacing: {
+${(spacing || []).map((v, i) => `        '${i}': '${v}px',`).join('\n')}
+      },
+    },
+  },
+}`;
+}
 
-  // ─── SECTION 3: COMPONENTS ───
-  lines.push(`---`);
-  lines.push(``);
-  lines.push(`## 3. Component Specifications`);
-  lines.push(``);
-  lines.push(L === 'zh'
-    ? `> 以下 25 個元件規範包含 HTML 結構、變體、狀態規則和 Tailwind/CSS class。AI agent 實作時應嚴格遵守 anatomy 和 class 定義。`
-    : L === 'ja'
-      ? `> 以下25のコンポーネント仕様にはHTML構造、バリアント、状態ルール、Tailwind/CSSクラスが含まれます。AI agentはanatomyとclass定義に厳密に従ってください。`
-      : `> 25 component specs below include HTML structure, variants, state rules, and Tailwind/CSS classes. AI agents should strictly follow the anatomy and class definitions.`
-  );
-  lines.push(``);
+/**
+ * Build font import HTML
+ */
+function buildFontImport(DS) {
+  const fonts = DS.fonts || {};
+  const families = [...new Set([fonts.heading || 'Inter', fonts.body || 'Inter'])];
+  const url = `https://fonts.googleapis.com/css2?${families.map(f => `family=${encodeURIComponent(f)}:wght@400;500;600;700;800`).join('&')}&display=swap`;
+  return `<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n<link href="${url}" rel="stylesheet">`;
+}
 
-  // Components section
+/**
+ * Build components reference markdown (detected components only)
+ */
+function buildComponentsReference(annotations, COMP_META, lang) {
+  const L = lang || 'en';
   const groups = {};
   for (const a of annotations || []) {
     if (!groups[a.typeId]) groups[a.typeId] = [];
     groups[a.typeId].push(a);
   }
 
-  const allIDs = Object.keys(COMP_META || {});
-  for (const tid of allIDs) {
+  const lines = [];
+  lines.push(`# Component Specifications`);
+  lines.push(``);
+
+  for (const tid of Object.keys(COMP_META || {})) {
     const meta = COMP_META[tid];
     const isAnnotated = groups[tid]?.length > 0;
-
-    lines.push(`### ${tid.charAt(0).toUpperCase() + tid.slice(1)}${isAnnotated ? ' ✦' : ''}`);
+    lines.push(`## ${tid.charAt(0).toUpperCase() + tid.slice(1)}${isAnnotated ? ' (annotated)' : ''}`);
     lines.push(`${meta.description}`);
     lines.push(``);
+    if (meta.variants?.length) lines.push(`Variants: ${meta.variants.join(', ')}`);
+    if (meta.sizes?.length) lines.push(`Sizes: ${meta.sizes.join(', ')}`);
+    lines.push(``);
 
-    if (meta.anatomy) {
-      lines.push(`**Anatomy:**`);
-      meta.anatomy.forEach((part) => lines.push(`- \`${part}\``));
-      lines.push(``);
-    }
-
-    // Base class
-    if (meta.baseClass) {
-      lines.push(`**Base class:** \`${meta.baseClass}\``);
-      lines.push(``);
-    }
-
-    if (meta.variants && meta.variants.length > 0) {
-      lines.push(`**Variants:** ${meta.variants.join(', ')}`);
-      lines.push(``);
-    }
-
-    // Variant classes (the actual implementation!)
-    if (meta.variantClasses && Object.keys(meta.variantClasses).length > 0) {
-      lines.push(`**Variant Classes:**`);
-      for (const [v, cls] of Object.entries(meta.variantClasses)) {
-        if (cls) lines.push(`- \`${v}\`: \`${cls}\``);
-      }
-      lines.push(``);
-    }
-
-    // Sizes
-    if (meta.sizes && meta.sizes.length > 0) {
-      lines.push(`**Sizes:** ${meta.sizes.join(', ')}`);
-      if (meta.sizeClasses && Object.keys(meta.sizeClasses).length > 0) {
-        for (const [sz, cls] of Object.entries(meta.sizeClasses)) {
-          lines.push(`- \`${sz}\`: \`${cls}\``);
-        }
-      }
-      lines.push(``);
-    }
-
-    // State rules
-    if (meta.stateRules && Object.keys(meta.stateRules).length > 0) {
-      lines.push(`**State Rules:**`);
-      for (const [st, rule] of Object.entries(meta.stateRules)) {
-        lines.push(`- \`${st}\`: ${rule}`);
-      }
-      lines.push(``);
-    }
-
-    // Usage rules
-    if (meta.usageRules && meta.usageRules.length > 0) {
-      lines.push(`**Usage Rules:**`);
-      meta.usageRules.forEach((r) => lines.push(`- ${r}`));
-      lines.push(``);
-    }
-
-    // Annotated styles if present (AI-analyzed from the reference image)
     if (isAnnotated) {
       const items = groups[tid];
-      lines.push(`**🔍 Annotated Styles from Reference Image (${items.length}):**`);
-      lines.push(``);
-      lines.push(L === 'zh'
-        ? `> 以下樣式是從參考圖片中 AI 辨識出的實際視覺屬性。請優先使用這些值。`
-        : L === 'ja'
-          ? `> 以下のスタイルは参照画像からAIが認識した実際の視覚属性です。これらの値を優先使用してください。`
-          : `> These styles were AI-analyzed from the actual reference image. Prefer these values over defaults.`
-      );
-      lines.push(``);
       items.forEach((a, i) => {
-        const label = `Variant ${i + 1}` + (a.aiCSS?.variant ? ` — ${a.aiCSS.variant}` : '');
-        lines.push(`**${label}:**`);
+        const label = a.aiCSS?.variant ? a.aiCSS.variant : `variant ${i + 1}`;
+        lines.push(`### ${label}`);
         if (a.aiCSS) {
           const slots = { ...a.aiCSS };
           delete slots.elementType;
           delete slots.innerElements;
-          if (slots.css) {
-            Object.assign(slots, slots.css);
-            delete slots.css;
-          }
-          lines.push('```json', JSON.stringify(slots, null, 2), '```', '');
+          if (slots.css) { Object.assign(slots, slots.css); delete slots.css; }
+          lines.push('```json', JSON.stringify(slots, null, 2), '```');
         } else if (a.visual) {
-          lines.push(
-            `- bg: \`${a.visual.bgColor}\`, fg: \`${a.visual.fgColor}\`, radius: ~${a.visual.estimatedRadius}px, size: ${a.visual.inferredSize}`,
-            ''
-          );
+          lines.push(`bg: ${a.visual.bgColor}, fg: ${a.visual.fgColor}, radius: ~${a.visual.estimatedRadius}px, size: ${a.visual.inferredSize}`);
         }
+        lines.push(``);
       });
     }
-    lines.push('');
   }
+  return lines.join('\n');
+}
 
-  // ─── SECTION 4: IMPLEMENTATION RULES ───
-  lines.push(`---`);
-  lines.push(``);
-  lines.push(`## 4. Implementation Rules`);
+/**
+ * Generate all SKILL folder files
+ * @returns {Object} Map of { filePath: content }
+ */
+export function generateSKILLFolder(DS, DS_other, annotations, lang, COMP_META, extractedColors, cssFramework, holisticResult, analysisLog) {
+  const fw = cssFramework || 'tailwind';
+  const files = {
+    'SKILL.md': buildMainSKILL(DS, DS_other, annotations, lang, COMP_META, holisticResult, fw),
+    'references/tokens.md': buildTokensReference(DS, lang),
+    'references/tokens.css': buildTokensCSS(DS),
+    'references/components.md': buildComponentsReference(annotations, COMP_META, lang),
+    'assets/font-import.html': buildFontImport(DS),
+  };
+  if (fw === 'tailwind') {
+    files['assets/tailwind.config.js'] = buildTailwindConfigJS(DS);
+  }
+  // Include JSON IR
+  files['design-system.json'] = JSON.stringify(
+    getJSONOutput(DS, annotations, COMP_META, extractedColors, fw, holisticResult, analysisLog),
+    null, 2
+  );
+  return files;
+}
+
+/**
+ * Download SKILL folder as ZIP
+ */
+export async function downloadSKILLZip(DS, DS_other, annotations, lang, COMP_META, extractedColors, cssFramework, holisticResult, analysisLog) {
+  if (!DS?.colors) { alert('Complete pipeline first'); return; }
+  const files = generateSKILLFolder(DS, DS_other, annotations, lang, COMP_META, extractedColors, cssFramework, holisticResult, analysisLog);
+  const JSZip = (await import('jszip')).default;
+  const zip = new JSZip();
+  for (const [path, content] of Object.entries(files)) {
+    zip.file(path, content);
+  }
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'design-system-skill.zip';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 200);
+}
+
+/**
+ * Build the concise main SKILL.md (80-120 lines, high signal)
+ */
+function buildMainSKILL(DS, DS_other, annotations, lang, COMP_META, holisticResult, fw) {
+  const { colors, isDark, typo, spacing, radius, shadows, fonts } = DS;
+  const semanticTokens = buildSemanticTokens(colors, isDark);
+  const holistic = holisticResult || null;
+  const headingFont = fonts?.heading || 'Inter';
+  const bodyFont = fonts?.body || 'Inter';
+  const L = lang || 'en';
+  const name = DS.name || 'Design System';
+  const fwLabel = { tailwind: 'Tailwind CSS', vanilla: 'Vanilla CSS', cssvar: 'CSS Variables' }[fw] || 'Tailwind CSS';
+
+  const lines = [];
+
+  // Header with trigger description
+  lines.push(`# ${name} — Design System Skill`);
   lines.push(``);
   if (L === 'zh') {
-    lines.push(`1. **顏色**：所有元件必須使用上方定義的色碼，不可使用預設色或自行猜測`);
-    lines.push(`2. **字體**：標題元素使用 \`${headingFont}\`，內文使用 \`${bodyFont}\`。必須引入 Google Fonts`);
-    lines.push(`3. **圓角**：根據元件大小選擇 sm/md/lg/xl/full，不要硬編碼像素值`);
-    lines.push(`4. **間距**：使用 spacing scale 中的值，保持一致性`);
-    lines.push(`5. **陰影**：僅使用 sm/md/lg 三級，不要自訂 box-shadow`);
-    lines.push(`6. **暗色模式**：此系統為${isDark ? '暗色' : '亮色'}主題，背景使用 \`surface\`，文字使用 \`text\``);
-    lines.push(`7. **狀態顏色**：success/warning/danger/info 用於 alert、badge、toast 等回饋元件`);
-    lines.push(`8. **按鈕文字色**：主色按鈕上的文字使用 \`text.onAction\` = \`${semanticTokens['text.onAction']}\``);
-    lines.push(`9. **Focus 狀態**：所有可互動元素需有 focus ring，使用 \`border.focus\` = \`${semanticTokens['border.focus']}\``);
-    lines.push(`10. **禁用狀態**：使用 40% opacity + pointer-events: none`);
+    lines.push(`> 用於建構 ${name} 的 UI 時載入此 skill。所有值皆從參考圖片分析而來 — 嚴格遵守。`);
   } else if (L === 'ja') {
-    lines.push(`1. **色**：全コンポーネントは上記定義の色コードを使用。デフォルト色や推測値を使わないこと`);
-    lines.push(`2. **フォント**：見出しは \`${headingFont}\`、本文は \`${bodyFont}\`。Google Fontsのインポート必須`);
-    lines.push(`3. **角丸**：コンポーネントサイズに応じてsm/md/lg/xl/fullを選択。ハードコードしないこと`);
-    lines.push(`4. **間隔**：spacing scaleの値を使用し、一貫性を保つ`);
-    lines.push(`5. **影**：sm/md/lgの3段階のみ使用。カスタムbox-shadow禁止`);
-    lines.push(`6. **テーマ**：${isDark ? 'ダーク' : 'ライト'}テーマ。背景は \`surface\`、テキストは \`text\` を使用`);
-    lines.push(`7. **状態色**：success/warning/danger/infoはalert、badge、toastなどのフィードバックコンポーネントに使用`);
-    lines.push(`8. **ボタンテキスト色**：primaryボタン上のテキストは \`text.onAction\` = \`${semanticTokens['text.onAction']}\``);
-    lines.push(`9. **Focus状態**：全インタラクティブ要素にfocus ringが必要。\`border.focus\` = \`${semanticTokens['border.focus']}\` を使用`);
-    lines.push(`10. **無効状態**：opacity 40% + pointer-events: none`);
+    lines.push(`> ${name} の UI 構築時にこのスキルを使用。全ての値は参照画像から分析 — 厳密に遵守。`);
   } else {
-    lines.push(`1. **Colors**: All components MUST use the color codes defined above. Never use default colors or guess values`);
-    lines.push(`2. **Fonts**: Headings use \`${headingFont}\`, body text uses \`${bodyFont}\`. Import from Google Fonts is required`);
-    lines.push(`3. **Border Radius**: Choose sm/md/lg/xl/full based on component size. Don't hardcode pixel values`);
-    lines.push(`4. **Spacing**: Use values from the spacing scale above for consistency`);
-    lines.push(`5. **Shadows**: Only use sm/md/lg levels. Don't create custom box-shadow values`);
-    lines.push(`6. **Theme**: This is a ${isDark ? 'dark' : 'light'} theme. Use \`surface\` for backgrounds, \`text\` for text`);
-    lines.push(`7. **State Colors**: success/warning/danger/info are for feedback components (alerts, badges, toasts)`);
-    lines.push(`8. **Button Text**: Text on primary buttons uses \`text.onAction\` = \`${semanticTokens['text.onAction']}\``);
-    lines.push(`9. **Focus State**: All interactive elements need a focus ring using \`border.focus\` = \`${semanticTokens['border.focus']}\``);
-    lines.push(`10. **Disabled State**: Use 40% opacity + pointer-events: none`);
+    lines.push(`> Use when building UI for ${name}. All values analyzed from reference image — follow strictly.`);
+  }
+  lines.push(``);
+  lines.push(`- **Mode:** ${isDark ? 'Dark' : 'Light'} · **Framework:** ${fwLabel} · **Generated:** ${new Date().toISOString().slice(0, 10)}`);
+  lines.push(``);
+
+  // Tokens — compact format
+  lines.push(`## Tokens`);
+  lines.push(``);
+  lines.push(`### Colors`);
+  lines.push(``);
+  lines.push(`| Token | Hex |`);
+  lines.push(`|-------|-----|`);
+  for (const k of ['primary', 'secondary', 'accent', 'surface', 'text', 'border', 'success', 'warning', 'danger', 'info']) {
+    lines.push(`| ${k} | \`${colors[k]}\` |`);
   }
   lines.push(``);
 
-  lines.push(
-    `---`,
-    `*Generated by img2ui · v2.1 · ${new Date().toISOString().slice(0, 10)}*`
-  );
+  // Typography compact
+  lines.push(`### Typography`);
+  lines.push(``);
+  lines.push(`Heading: \`${headingFont}\` · Body: \`${bodyFont}\``);
+  lines.push(``);
+  lines.push((typo || []).map(t => `${t.name} ${t.size}/${t.weight}`).join(' · '));
+  lines.push(``);
 
-  const md = lines.join('\n');
+  // Layout compact
+  lines.push(`### Layout`);
+  lines.push(``);
+  lines.push(`Spacing: ${(spacing || []).map(v => v + 'px').join(' · ')}`);
+  lines.push(`Radius: ${Object.entries(radius).map(([k, v]) => `${k}=${v}`).join(' · ')}`);
+  lines.push(`Shadows: sm · md · lg`);
+  lines.push(``);
+
+  // Style DNA
+  lines.push(`## Style DNA`);
+  lines.push(``);
+  lines.push(generateStyleDNA(holistic, isDark, L));
+  lines.push(``);
+
+  // Gotchas
+  const gotchas = generateGotchas(DS, semanticTokens, holistic, L);
+  if (gotchas.length > 0) {
+    lines.push(`## ⚠ Gotchas`);
+    lines.push(``);
+    gotchas.forEach(g => lines.push(`- ${g}`));
+    lines.push(``);
+  }
+
+  // Detected components (only annotated)
+  const groups = {};
+  for (const a of annotations || []) {
+    if (!groups[a.typeId]) groups[a.typeId] = [];
+    groups[a.typeId].push(a);
+  }
+  const annotatedTypes = Object.keys(groups);
+  if (annotatedTypes.length > 0) {
+    lines.push(`## Detected Components (${annotatedTypes.length} annotated)`);
+    lines.push(``);
+    for (const tid of annotatedTypes) {
+      const items = groups[tid];
+      lines.push(`### ${tid.charAt(0).toUpperCase() + tid.slice(1)} (${items.length})`);
+      items.forEach((a, i) => {
+        if (a.aiCSS) {
+          const slots = { ...a.aiCSS };
+          delete slots.elementType; delete slots.innerElements;
+          if (slots.css) { Object.assign(slots, slots.css); delete slots.css; }
+          const variant = slots.variant || `#${i + 1}`;
+          delete slots.variant;
+          const props = Object.entries(slots).map(([k, v]) => `${k}=${v}`).join(' ');
+          lines.push(`- **${variant}:** ${props}`);
+        } else if (a.visual) {
+          lines.push(`- **#${i + 1}:** bg=${a.visual.bgColor} fg=${a.visual.fgColor} radius=~${a.visual.estimatedRadius}px size=${a.visual.inferredSize}`);
+        }
+      });
+      lines.push(``);
+    }
+  }
+
+  // References footer
+  lines.push(`## References`);
+  lines.push(``);
+  if (L === 'zh') {
+    lines.push(`- \`references/tokens.md\` — 完整 token 表格（含 semantic tokens）`);
+    lines.push(`- \`references/tokens.css\` — 可直接複製的 CSS custom properties`);
+    lines.push(`- \`references/components.md\` — 完整 25 元件規格`);
+    if (fw === 'tailwind') lines.push(`- \`assets/tailwind.config.js\` — Tailwind 設定`);
+    lines.push(`- \`assets/font-import.html\` — Google Fonts 載入`);
+  } else if (L === 'ja') {
+    lines.push(`- \`references/tokens.md\` — 完全なトークンテーブル`);
+    lines.push(`- \`references/tokens.css\` — コピー可能な CSS custom properties`);
+    lines.push(`- \`references/components.md\` — 全25コンポーネント仕様`);
+    if (fw === 'tailwind') lines.push(`- \`assets/tailwind.config.js\` — Tailwind設定`);
+    lines.push(`- \`assets/font-import.html\` — Google Fontsインポート`);
+  } else {
+    lines.push(`- \`references/tokens.md\` — Full token tables with semantic tokens`);
+    lines.push(`- \`references/tokens.css\` — Copy-paste CSS custom properties`);
+    lines.push(`- \`references/components.md\` — Full 25 component specifications`);
+    if (fw === 'tailwind') lines.push(`- \`assets/tailwind.config.js\` — Tailwind config extension`);
+    lines.push(`- \`assets/font-import.html\` — Google Fonts import`);
+  }
+  lines.push(``);
+  lines.push(`---`);
+  lines.push(`*Generated by img2ui · v0.2 · ${new Date().toISOString().slice(0, 10)}*`);
+
+  return lines.join('\n');
+}
+
+/**
+ * Download design system as SKILL.md (single file, concise version)
+ */
+export function downloadSKILL(DS, annotations, lang, COMP_META, extractedColors, cssFramework, holisticResult) {
+  if (!DS?.colors) { alert('Complete pipeline first'); return; }
+  const fw = cssFramework || 'tailwind';
+  const md = buildMainSKILL(DS, null, annotations, lang, COMP_META, holisticResult, fw);
   dl(md, 'SKILL.md', 'text/markdown');
 }
 

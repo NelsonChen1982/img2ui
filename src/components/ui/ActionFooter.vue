@@ -3,7 +3,7 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
 import { I } from '../../data/i18n'
-import { getJSONOutput, downloadSKILL, downloadHTML } from '../../services/downloadService'
+import { getJSONOutput, downloadSKILL, downloadSKILLZip, downloadHTML } from '../../services/downloadService'
 import { buildUIKitHTML } from '../../services/uiKitRenderer'
 import { COMP_META } from '../../data/compMeta'
 
@@ -133,6 +133,19 @@ function doExport() {
       settingsStore.selectedCSSFramework,
       pipelineStore.holisticResult
     )
+  } else if (exportFormat.value === 'skill-zip') {
+    const otherDS = exportTheme.value === 'dark' ? pipelineStore.DS_light : pipelineStore.DS_dark
+    downloadSKILLZip(
+      chosenDS,
+      otherDS,
+      pipelineStore.annotations,
+      settingsStore.lang,
+      COMP_META,
+      pipelineStore.extractedColors,
+      settingsStore.selectedCSSFramework,
+      pipelineStore.holisticResult,
+      pipelineStore.analysisLog
+    )
   } else if (exportFormat.value === 'html') {
     const html = buildUIKitHTML(chosenDS, pipelineStore.annotations, pipelineStore.analysisLog)
     downloadHTML(chosenDS, html)
@@ -225,6 +238,11 @@ onUnmounted(() => { document.removeEventListener('click', onClickOutsideExport, 
                   <input type="radio" v-model="exportFormat" value="skill" />
                   <i class="fa-duotone fa-thin fa-wand-magic-sparkles" style="margin-right:4px;font-size:11px;"></i>
                   <span>SKILL.md</span>
+                </label>
+                <label class="af-export-radio" :class="{ 'af-export-radio--active': exportFormat === 'skill-zip' }">
+                  <input type="radio" v-model="exportFormat" value="skill-zip" />
+                  <i class="fa-duotone fa-thin fa-folder-open" style="margin-right:4px;font-size:11px;"></i>
+                  <span>SKILL ZIP</span>
                 </label>
                 <label class="af-export-radio" :class="{ 'af-export-radio--active': exportFormat === 'html' }">
                   <input type="radio" v-model="exportFormat" value="html" />
