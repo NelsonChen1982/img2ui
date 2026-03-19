@@ -7,7 +7,7 @@
 
   Upload a screenshot, mockup, photo, or illustration — get colors, typography, spacing tokens, and 25 rendered UI components.
 
-  [Live Demo](#) &nbsp;|&nbsp; [繁體中文](README.zh-TW.md) &nbsp;|&nbsp; [日本語](README.ja.md)
+  [Live Demo](https://img2ui.com) &nbsp;|&nbsp; [繁體中文](README.zh-TW.md) &nbsp;|&nbsp; [日本語](README.ja.md)
 </div>
 
 ---
@@ -97,6 +97,7 @@ Image Upload
 |--------|------------|
 | **JSON** | Full design system + component definitions as structured IR |
 | **SKILL.md** | Markdown spec for coding agents (Claude Code, Cursor, etc.) |
+| **SKILL ZIP** | Bundled archive with dual-theme tokens, analysis log, and modular skill files |
 | **HTML** | Standalone preview page with all components rendered |
 
 ## Project Structure

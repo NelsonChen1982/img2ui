@@ -7,7 +7,7 @@
 
   上傳截圖、設計稿、照片或插圖 — 自動產出配色、字體、間距 token，以及 25 種 UI 元件。
 
-  [線上 Demo](#) &nbsp;|&nbsp; [English](README.md) &nbsp;|&nbsp; [日本語](README.ja.md)
+  [線上 Demo](https://img2ui.com) &nbsp;|&nbsp; [English](README.md) &nbsp;|&nbsp; [日本語](README.ja.md)
 </div>
 
 ---
@@ -97,6 +97,7 @@ npm run build
 |------|------|
 | **JSON** | 完整 Design System + 元件定義的結構化 IR |
 | **SKILL.md** | 供 coding agent 使用的 Markdown 規範（Claude Code、Cursor 等） |
+| **SKILL ZIP** | 打包雙主題 token、分析紀錄與模組化 skill 檔案的壓縮封裝 |
 | **HTML** | 獨立預覽頁面，包含所有渲染元件 |
 
 ## 專案結構
