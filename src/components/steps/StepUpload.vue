@@ -254,6 +254,9 @@ async function handleNext() {
           <div style="font-size:14px;font-weight:600;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
             {{ authStore.user?.name || authStore.user?.email || '' }}
           </div>
+          <div v-if="authStore.user?.name && authStore.user?.email" style="font-size:11px;color:#aaa;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            {{ authStore.user.email }}
+          </div>
           <div style="font-size:12px;color:#999;margin-top:2px;display:flex;align-items:center;gap:5px">
             <i class="fa-duotone fa-thin fa-coins" style="font-size:11px"></i>
             {{ creditsNotice }}

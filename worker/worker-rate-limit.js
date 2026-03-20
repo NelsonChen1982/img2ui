@@ -805,6 +805,33 @@ export default {
       return new Response(JSON.stringify({ balance, canGenerate: genCount === 0 || balance > 0 }), { headers });
     }
 
+    // ─── Credits History ───
+    if (url.pathname === '/api/credits-history' && request.method === 'GET') {
+      const userId = url.searchParams.get('user_id');
+      const sessionToken = url.searchParams.get('session_token');
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'missing_user_id' }), { status: 400, headers });
+      }
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      if (!isDevBypass(request, env)) {
+        const valid = await verifySession(env, sessionToken, userId, ip);
+        if (!valid) {
+          return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+        }
+      }
+      if (!env.DB) {
+        return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+      }
+      try {
+        const rows = await env.DB.prepare(
+          'SELECT id, amount, type, memo, created_at FROM credits_ledger WHERE user_id = ? ORDER BY created_at DESC LIMIT 50'
+        ).bind(userId).all();
+        return new Response(JSON.stringify({ items: rows.results || [] }), { headers });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'query_failed' }), { status: 500, headers });
+      }
+    }
+
     // ─── Claim Anonymous Designs ───
     if (url.pathname === '/api/claim-designs' && request.method === 'POST') {
       let body;

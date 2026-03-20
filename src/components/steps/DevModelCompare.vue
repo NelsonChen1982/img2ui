@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
+import { useAuthStore } from '../../stores/auth'
 import { cropAnnotationToBase64 } from '../../services/aiService'
 import { buildComponentPrompt } from '../../services/aiService'
 import { tryParseJSON } from '../../services/aiService'
@@ -11,6 +12,7 @@ import { COMP_SKELETON } from '../../data/compSkeleton'
 const emit = defineEmits(['close'])
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
+const authStore = useAuthStore()
 
 const ALL_MODELS = [
   { value: 'gpt4o-mini', label: 'GPT-4o Mini' },
@@ -63,8 +65,9 @@ function workerHeaders() {
 
 async function callModelViaWorker(base64, prompt, model) {
   const apiBase = window.PIC2UI_API_BASE || import.meta.env.VITE_API_BASE || ''
-  const email = settingsStore.email || ''
-  const sessionToken = pipelineStore.sessionToken || ''
+  const email = authStore.user?.email || settingsStore.email || ''
+  const sessionToken = authStore.sessionToken || pipelineStore.sessionToken || ''
+  const userId = authStore.user?.id || ''
 
   const resp = await fetch(`${apiBase}/api/analyze-component`, {
     method: 'POST',
@@ -76,6 +79,7 @@ async function callModelViaWorker(base64, prompt, model) {
       email,
       provider: model,
       session_token: sessionToken,
+      user_id: userId,
     }),
   })
   if (!resp.ok) {
