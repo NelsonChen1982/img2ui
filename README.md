@@ -134,7 +134,6 @@ docs/              # Design documents
 
 ## Roadmap
 
-- [x] **Community Gallery** — Browse and explore design systems created by other users
 - [ ] **Share Design** — Share a design via URL, embed card, or social media (OG image generation)
 - [ ] **Landing Page Redesign** — New landing page with feature highlights, testimonials, and conversion funnel
 - [ ] **Smart Image Classification** — Auto-detect whether the upload is a UI screenshot or a photo, and conditionally offer the annotation workflow
