@@ -1,8 +1,10 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useSettingsStore } from '../../stores/settings'
 
+const router = useRouter()
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const open = ref(false)
@@ -42,6 +44,7 @@ function t(obj) {
 const I = {
   credits: { zh: '點數', en: 'Credits', ja: 'クレジット' },
   history: { zh: '點數紀錄', en: 'Credit History', ja: 'クレジット履歴' },
+  myDesigns: { zh: '我的設計', en: 'My Designs', ja: 'マイデザイン' },
   logout: { zh: '登出', en: 'Sign out', ja: 'ログアウト' },
   noRecords: { zh: '尚無紀錄', en: 'No records yet', ja: '記録なし' },
 }
@@ -170,6 +173,15 @@ async function openHistory() {
           </div>
         </div>
 
+        <!-- My Designs -->
+        <button
+          @click="close(); router.push('/my-designs')"
+          style="width:100%;text-align:left;padding:8px 14px;background:none;border:none;font-size:11px;color:#666;cursor:pointer;transition:color .2s;border-bottom:1px solid #f0f0f0"
+        >
+          <i class="fa-duotone fa-thin fa-grid-2" style="margin-right:5px"></i>
+          {{ t(I.myDesigns) }}
+        </button>
+
         <!-- History -->
         <button
           @click="openHistory"
@@ -203,7 +215,7 @@ async function openHistory() {
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <h3 style="font-size:16px;font-weight:700;color:#222;margin:0">{{ t(I.history) }}</h3>
           <button @click="historyOpen = false" style="background:none;border:none;font-size:16px;color:#aaa;cursor:pointer;padding:4px">
-            <i class="fa-solid fa-xmark"></i>
+            <i class="fa-duotone fa-thin fa-xmark"></i>
           </button>
         </div>
 

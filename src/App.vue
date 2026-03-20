@@ -1,24 +1,17 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { usePipelineStore } from './stores/pipeline'
 import { useSettingsStore } from './stores/settings'
 import { useRateLimitStore } from './stores/rateLimit'
 import { useAuthStore } from './stores/auth'
-import WizardBar from './components/ui/WizardBar.vue'
-import ActionFooter from './components/ui/ActionFooter.vue'
 import DropdownMenu from './components/ui/DropdownMenu.vue'
 import AuthModal from './components/ui/AuthModal.vue'
 import LoginButton from './components/ui/LoginButton.vue'
 import UserMenu from './components/ui/UserMenu.vue'
 import logoImg from './assets/logo.jpg'
-import StepUpload from './components/steps/StepUpload.vue'
-import StepScan from './components/steps/StepScan.vue'
-import StepColors from './components/steps/StepColors.vue'
-import StepAnnotate from './components/steps/StepAnnotate.vue'
-import StepProcessing from './components/steps/StepProcessing.vue'
-import StepResult from './components/steps/StepResult.vue'
-import DevModelCompare from './components/steps/DevModelCompare.vue'
 
+const router = useRouter()
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
 const rateLimitStore = useRateLimitStore()
@@ -41,8 +34,6 @@ if (import.meta.env.VITE_GOOGLE_CLIENT_ID) {
   document.head.appendChild(gsi)
 }
 
-const currentStep = computed(() => pipelineStore.step)
-const isDev = import.meta.env.DEV
 const mobileMenuOpen = ref(false)
 const toast = ref(null)
 let toastTimer = null
@@ -166,13 +157,17 @@ function handleModelChange(value) {
   <header style="background:#fff;border-bottom:1px solid #e8e8e8;flex-shrink:0;">
     <div class="header-row">
       <!-- Left: logo + brand -->
-      <div style="display:flex;align-items:center;gap:8px;cursor:pointer" @click="pipelineStore.restartPipeline()">
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer" @click="pipelineStore.restartPipeline(); router.push('/')">
         <img :src="logoImg" alt="img2ui" style="width:28px;height:28px;border-radius:7px;">
         <span class="brand-title" style="font-size:15px;font-weight:800;letter-spacing:.06em;color:#222;">img2ui</span>
       </div>
 
       <!-- Desktop: all dropdowns inline -->
       <div class="header-controls-desktop" style="display:flex;gap:8px;align-items:center;">
+        <router-link to="/gallery" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:500;color:#555;text-decoration:none;border:1px solid #e8e8e8;transition:all .15s;" class="gallery-nav-link">
+          <i class="fa-duotone fa-thin fa-grid-2" style="font-size:11px;"></i>
+          Gallery
+        </router-link>
         <DropdownMenu :items="cssFrameworks" :model-value="settingsStore.selectedCSSFramework" @update:model-value="handleCSSFrameworkChange">
           <template #trigger>
             <i class="fa-duotone fa-thin fa-code" style="font-size:11px;"></i>
@@ -207,7 +202,6 @@ function handleModelChange(value) {
       </button>
     </div>
 
-    <WizardBar v-if="currentStep !== 1" />
   </header>
 
   <!-- Mobile menu drawer -->
@@ -226,7 +220,7 @@ function handleModelChange(value) {
         <div style="display:flex;align-items:center;justify-content:space-between;padding:0 18px 16px;border-bottom:1px solid #f0f0f0;">
           <span style="font-size:13px;font-weight:700;color:#222;">設定</span>
           <button @click="mobileMenuOpen = false" style="background:none;border:none;font-size:16px;color:#aaa;cursor:pointer;padding:4px;">
-            <i class="fa-solid fa-xmark"></i>
+            <i class="fa-duotone fa-thin fa-xmark"></i>
           </button>
         </div>
 
@@ -346,7 +340,7 @@ function handleModelChange(value) {
       <div style="background:#fff;border-radius:16px;padding:24px;max-width:360px;width:90%;max-height:70vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,.12)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <h3 style="font-size:16px;font-weight:700;color:#222;margin:0">{{ settingsStore.lang === 'zh' ? '點數紀錄' : settingsStore.lang === 'ja' ? 'クレジット履歴' : 'Credit History' }}</h3>
-          <button @click="historyOpen = false" style="background:none;border:none;font-size:16px;color:#aaa;cursor:pointer;padding:4px;"><i class="fa-solid fa-xmark"></i></button>
+          <button @click="historyOpen = false" style="background:none;border:none;font-size:16px;color:#aaa;cursor:pointer;padding:4px;"><i class="fa-duotone fa-thin fa-xmark"></i></button>
         </div>
         <div style="flex:1;overflow-y:auto;min-height:0">
           <div v-if="historyLoading" style="text-align:center;padding:24px;color:#aaa;font-size:13px">
@@ -374,33 +368,9 @@ function handleModelChange(value) {
     </div>
   </Teleport>
 
-  <!-- Main content area -->
-  <main style="flex:1;padding:36px 28px;overflow:auto;background:#fafafa;">
-    <!-- Step 1: Upload -->
-    <StepUpload v-if="currentStep === 1" />
-
-    <!-- Step 2: Scan -->
-    <StepScan v-if="currentStep === 2" />
-
-    <!-- Step 3: Colors -->
-    <StepColors v-if="currentStep === 3" />
-
-    <!-- Step 5: Annotate -->
-    <StepAnnotate v-if="currentStep === 5" />
-
-    <!-- Step 6: Processing -->
-    <StepProcessing v-if="currentStep === 6" />
-
-    <!-- Step 7: Result -->
-    <StepResult v-if="currentStep === 7" />
-  </main>
-
-  <!-- Action footer -->
-  <ActionFooter />
+  <!-- Route content -->
+  <router-view />
 
   <!-- Auth Modal -->
   <AuthModal />
-
-  <!-- Dev-only: model comparison overlay -->
-  <DevModelCompare v-if="isDev && pipelineStore.showDevCompare" @close="pipelineStore.showDevCompare = false" />
 </template>

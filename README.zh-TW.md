@@ -1,7 +1,7 @@
 <div align="center">
   <img src="src/assets/logo.jpg" alt="img2ui" width="120" style="border-radius: 16px;" />
 
-  # img2ui <sup>v0.1-beta</sup>
+  # img2ui <sup>v0.3-beta</sup>
 
   **將任意圖片轉換為完整的 Design System**
 
@@ -107,11 +107,14 @@ npm run build
 src/
 ├── components/
 │   ├── steps/     # 六步驟精靈（上傳 → 辨識 → 配色 → 標注 → 產出中 → 結果）
-│   └── ui/        # 共用 UI（WizardBar、DropdownMenu、ActionFooter、AuthModal、UserMenu）
+│   └── ui/        # 共用 UI（WizardBar、DropdownMenu、ActionFooter、AuthModal、UserMenu、
+│                  #   GalleryCard、GalleryMarquee、DesignPreviewCard）
+├── views/         # 路由頁面（WizardView、GalleryList、GalleryDetail、MyDesigns）
 ├── services/      # 業務邏輯（AI、色彩萃取、DS 建構、渲染器、匯出）
 ├── stores/        # Pinia stores（pipeline、settings、auth、rateLimit）
-└── data/          # 元件類型、metadata、骨架、i18n、常數
-worker/            # Cloudflare Worker（認證、點數、頻率限制、R2 圖片儲存、D1）
+├── data/          # 元件類型、metadata、骨架、i18n、常數
+└── router.js      # vue-router（/、/gallery、/gallery/:id、/my-designs）
+worker/            # Cloudflare Worker（認證、點數、頻率限制、R2 圖片儲存、D1、Gallery API）
 docs/              # 設計文件
 ```
 
@@ -119,6 +122,7 @@ docs/              # 設計文件
 
 | 版本 | 里程碑 |
 |------|--------|
+| **v0.3-beta** | 社群 Gallery（`/gallery`）：公開瀏覽設計作品、色票卡片搭配 hover UI Kit 預覽、色系/主題/排序篩選、每位用戶最多顯示 5 件。Gallery 詳情頁含封面預覽、完整 UI Kit 渲染、可收合 JSON 面板、原圖查看（擁有者限定）。我的設計頁（`/my-designs`）含公開/私密切換、軟刪除。首頁跑馬燈展示最新社群作品。vue-router 整合。下載彈窗含全部 6 種格式。Gallery API、R2 圖片代理、soft delete。 |
 | **v0.2-beta** | Google + GitHub OAuth 登入、點數制（註冊送 10 點、每日登入 +3、上限 50）、匿名首次免費體驗、首頁雙欄版面重設計、會員選單含點數顯示、移除 Kit 頁重新標註、Dark theme 封面文字修正 |
 | **v0.1.1-beta** | Figma Plugin JSON 匯出、第三步驟略過標註捷徑、底部列版面重新設計 |
 | **v0.1-beta** | 程式碼結構重構、雙主題（淺色/深色）色盤生成 |
@@ -129,7 +133,9 @@ docs/              # 設計文件
 
 ## 開發路線
 
-- [ ] **社群 Gallery** — 瀏覽其他使用者建立的 Design System 作品（認證系統已就位）
+- [x] **社群 Gallery** — 瀏覽其他使用者建立的 Design System 作品
+- [ ] **分享設計** — 透過 URL、嵌入卡片或社群媒體分享設計（OG 圖片生成）
+- [ ] **首頁改版** — 全新首頁設計，含功能亮點、使用者見證、轉換漏斗
 - [ ] **智慧圖片分類** — 自動判斷上傳圖片為 UI 截圖或照片，依結果決定是否提供標注流程
 - [ ] **Figma 原生剪貼簿** — 無需 Plugin，直接將 design token 貼上到 Figma（透過 fig-kiwi 二進位格式）
 - [ ] **npm / npx 安裝套件** — 封裝為可安裝的 CLI skill 套件，讓使用者可透過 `npx img2ui` 直接在終端產生 Design System

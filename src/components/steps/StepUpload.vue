@@ -5,6 +5,7 @@ import { useSettingsStore } from '../../stores/settings'
 import { useAuthStore } from '../../stores/auth'
 import { I } from '../../data/i18n'
 import logoImg from '../../assets/logo.jpg'
+import GalleryMarquee from '../ui/GalleryMarquee.vue'
 
 function t(obj) {
   if (!obj) return ''
@@ -388,6 +389,9 @@ async function handleNext() {
 
     </div>
   </div>
+
+  <!-- Community Designs Marquee -->
+  <GalleryMarquee />
 </template>
 
 <style scoped>

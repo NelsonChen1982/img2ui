@@ -16,7 +16,9 @@
       "Bash(npm info:*)",
       "Bash(npm install:*)",
       "Bash(node -e \":*)",
-      "Bash(node --input-type=module -e \":*)"
+      "Bash(node --input-type=module -e \":*)",
+      "Bash(ls /Users/nelson/Dropbox/websites/img2ui/worker/migration*.sql)",
+      "Bash(npx wrangler:*)"
     ]
   }
 }

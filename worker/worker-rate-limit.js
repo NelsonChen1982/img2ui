@@ -581,6 +581,37 @@ async function checkAndIncrementRate(env, ip, email, headers, limit = DAILY_LIMI
   return { error: false, remaining: limit - (ipCount + 1) };
 }
 
+// ─── Color Helpers (gallery) ───
+
+function hexToHsl(hex) {
+  if (!hex || !hex.startsWith('#')) return { h: 0, s: 0, l: 0 };
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l: Math.round(l * 100) };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
+function computeColorFamily(hex) {
+  const { h, s } = hexToHsl(hex);
+  if (s < 10) return 'neutral';
+  if (h <= 30 || h > 330) return 'red';
+  if (h <= 60) return 'orange';
+  if (h <= 90) return 'yellow';
+  if (h <= 150) return 'green';
+  if (h <= 210) return 'cyan';
+  if (h <= 270) return 'blue';
+  return 'purple';
+}
+
 // ─── D1 Helpers ───
 
 async function upsertEmail(db, email, ip) {
@@ -605,18 +636,30 @@ async function logUsage(db, email, endpoint, provider, ip, imageKey, usage) {
   ).run();
 }
 
-async function saveDesignTokens(db, email, imageKey, tokensJson, annotationsJson, holisticJson, provider, userId) {
+async function saveDesignTokens(db, email, imageKey, tokensJson, annotationsJson, holisticJson, provider, userId, { title, visibility } = {}) {
   const id = generateId();
+  const tokensStr = typeof tokensJson === 'string' ? tokensJson : JSON.stringify(tokensJson);
+  const tokensObj = typeof tokensJson === 'string' ? JSON.parse(tokensJson) : tokensJson;
+
+  const primaryColor = tokensObj?.colors?.primary || '';
+  const colorFamily = computeColorFamily(primaryColor);
+  const isDark = tokensObj?.isDark ? 1 : 0;
+
   await db.prepare(
-    'INSERT INTO design_tokens (id, user_id, email, image_key, tokens_json, annotations_json, holistic_json, provider) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO design_tokens (id, user_id, email, image_key, tokens_json, annotations_json, holistic_json, provider, title, visibility, primary_color, color_family, is_dark) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     id,
     userId || null,
     normalizeEmail(email || ''), imageKey || '',
-    typeof tokensJson === 'string' ? tokensJson : JSON.stringify(tokensJson),
+    tokensStr,
     typeof annotationsJson === 'string' ? annotationsJson : JSON.stringify(annotationsJson),
     typeof holisticJson === 'string' ? holisticJson : JSON.stringify(holisticJson),
     provider || '',
+    title || '',
+    visibility || 'public',
+    primaryColor,
+    colorFamily,
+    isDark,
   ).run();
   return id;
 }
@@ -645,7 +688,7 @@ export default {
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': getCorsOrigin(request),
-          'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+          'Access-Control-Allow-Methods': 'POST, GET, PATCH, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, X-Session-Token, x-dev-key',
           'Access-Control-Max-Age': '86400',
         },
@@ -997,7 +1040,7 @@ export default {
         return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
       }
 
-      const { user_id: userId, email, image_key: imageKey, tokens, annotations, holistic, provider, session_token: sessionToken } = body;
+      const { user_id: userId, email, image_key: imageKey, tokens, annotations, holistic, provider, session_token: sessionToken, title, visibility } = body;
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
 
       // Session verification: flexible — accept user_id, email, or anon session
@@ -1027,7 +1070,7 @@ export default {
 
       try {
         // Save design tokens (user_id can be null for anonymous)
-        const designId = await saveDesignTokens(env.DB, email || '', imageKey, tokens, annotations || [], holistic || {}, provider, userId);
+        const designId = await saveDesignTokens(env.DB, email || '', imageKey, tokens, annotations || [], holistic || {}, provider, userId, { title, visibility });
 
         // Credit deduction for logged-in users
         if (userId) {
@@ -1076,6 +1119,288 @@ export default {
         return new Response(JSON.stringify({ results: rows.results || [] }), { headers });
       } catch (err) {
         return new Response(JSON.stringify({ error: 'query_failed' }), { status: 500, headers });
+      }
+    }
+
+    // ─── Gallery: Public List ───
+    if (url.pathname === '/api/gallery' && request.method === 'GET') {
+      if (!env.DB) return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+
+      const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+      const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '20')));
+      const sort = url.searchParams.get('sort') === 'downloads' ? 'download_count DESC' : 'created_at DESC';
+      const hue = url.searchParams.get('hue') || '';
+      const theme = url.searchParams.get('theme') || '';
+      const mine = url.searchParams.get('mine') === '1';
+      const userId = url.searchParams.get('user_id') || '';
+      const sessionToken = url.searchParams.get('session_token') || '';
+      const offset = (page - 1) * limit;
+
+      const conditions = ['d.deleted_at IS NULL'];
+      const binds = [];
+
+      if (mine && userId) {
+        // Owner sees own designs (public + private)
+        const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+        const valid = isDevBypass(request, env) || await verifySessionFlex(env, sessionToken, ip, { userId });
+        if (!valid) return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+        conditions.push('d.user_id = ?');
+        binds.push(userId);
+      } else {
+        conditions.push("d.visibility = 'public'");
+      }
+      if (hue && /^(red|orange|yellow|green|cyan|blue|purple|neutral)$/.test(hue)) {
+        conditions.push('d.color_family = ?');
+        binds.push(hue);
+      }
+      if (theme === 'light') { conditions.push('d.is_dark = 0'); }
+      else if (theme === 'dark') { conditions.push('d.is_dark = 1'); }
+
+      const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+      // Public gallery: limit each user to 5 designs max (My Designs: no limit)
+      const perUserLimit = !mine;
+
+      try {
+        let countSql, dataSql;
+        if (perUserLimit) {
+          // CTE: rank each user's designs, keep top 5 per user
+          const cte = `WITH ranked AS (
+            SELECT d.*, ROW_NUMBER() OVER (PARTITION BY COALESCE(d.user_id, d.id) ORDER BY d.created_at DESC) as rn
+            FROM design_tokens d ${where}
+          )`;
+          countSql = `${cte} SELECT COUNT(*) as total FROM ranked WHERE rn <= 5`;
+          dataSql = `${cte}
+            SELECT r.id, r.title, r.primary_color, r.color_family, r.is_dark, r.download_count, r.created_at, r.visibility,
+              r.tokens_json,
+              u.name as user_name, u.avatar_url as user_avatar
+            FROM ranked r
+            LEFT JOIN users u ON r.user_id = u.id
+            WHERE r.rn <= 5
+            ORDER BY r.${sort}
+            LIMIT ? OFFSET ?`;
+        } else {
+          countSql = `SELECT COUNT(*) as total FROM design_tokens d ${where}`;
+          dataSql = `SELECT d.id, d.title, d.primary_color, d.color_family, d.is_dark, d.download_count, d.created_at, d.visibility,
+            d.tokens_json,
+            u.name as user_name, u.avatar_url as user_avatar
+          FROM design_tokens d
+          LEFT JOIN users u ON d.user_id = u.id
+          ${where}
+          ORDER BY d.${sort}
+          LIMIT ? OFFSET ?`;
+        }
+
+        const countRow = await env.DB.prepare(countSql).bind(...binds).first();
+        const total = countRow?.total || 0;
+
+        const rows = await env.DB.prepare(dataSql).bind(...binds, limit, offset).all();
+
+        const items = (rows.results || []).map(r => {
+          let colors = {};
+          try { const t = JSON.parse(r.tokens_json || '{}'); colors = t.colors || {}; } catch {}
+          return {
+            id: r.id, title: r.title, primary_color: r.primary_color, color_family: r.color_family,
+            is_dark: r.is_dark, download_count: r.download_count, created_at: r.created_at,
+            visibility: r.visibility, colors, user_name: r.user_name || '', user_avatar: r.user_avatar || '',
+          };
+        });
+
+        return new Response(JSON.stringify({ items, total, page }), { headers });
+      } catch (err) {
+        console.error('[worker] gallery list error:', err.message);
+        return new Response(JSON.stringify({ error: 'query_failed' }), { status: 500, headers });
+      }
+    }
+
+    // ─── Gallery: Single Design Detail ───
+    if (url.pathname.startsWith('/api/gallery/') && request.method === 'GET') {
+      if (!env.DB) return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+
+      const designId = url.pathname.split('/api/gallery/')[1];
+      if (!designId) return new Response(JSON.stringify({ error: 'missing_id' }), { status: 400, headers });
+
+      try {
+        const row = await env.DB.prepare(
+          `SELECT d.*, u.name as user_name, u.avatar_url as user_avatar
+          FROM design_tokens d LEFT JOIN users u ON d.user_id = u.id
+          WHERE d.id = ? AND d.deleted_at IS NULL`
+        ).bind(designId).first();
+
+        if (!row) return new Response(JSON.stringify({ error: 'not_found' }), { status: 404, headers });
+
+        // Private designs: only owner can view
+        if (row.visibility === 'private') {
+          const reqUserId = url.searchParams.get('user_id') || '';
+          if (row.user_id !== reqUserId) {
+            return new Response(JSON.stringify({ error: 'not_found' }), { status: 404, headers });
+          }
+        }
+
+        return new Response(JSON.stringify({
+          design: {
+            id: row.id, title: row.title, user_id: row.user_id,
+            user_name: row.user_name || '', user_avatar: row.user_avatar || '',
+            primary_color: row.primary_color, color_family: row.color_family,
+            is_dark: row.is_dark, download_count: row.download_count,
+            visibility: row.visibility, created_at: row.created_at,
+            tokens_json: row.tokens_json, annotations_json: row.annotations_json,
+            holistic_json: row.holistic_json, provider: row.provider, image_key: row.image_key,
+          }
+        }), { headers });
+      } catch (err) {
+        console.error('[worker] gallery detail error:', err.message);
+        return new Response(JSON.stringify({ error: 'query_failed' }), { status: 500, headers });
+      }
+    }
+
+    // ─── Gallery: Download Count Increment ───
+    if (url.pathname.match(/^\/api\/gallery\/[^/]+\/download$/) && request.method === 'POST') {
+      if (!env.DB) return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+
+      const designId = url.pathname.split('/api/gallery/')[1].replace('/download', '');
+      try {
+        await env.DB.prepare('UPDATE design_tokens SET download_count = download_count + 1 WHERE id = ? AND deleted_at IS NULL').bind(designId).run();
+        const row = await env.DB.prepare('SELECT download_count FROM design_tokens WHERE id = ? AND deleted_at IS NULL').bind(designId).first();
+        return new Response(JSON.stringify({ download_count: row?.download_count || 0 }), { headers });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'update_failed' }), { status: 500, headers });
+      }
+    }
+
+    // ─── Gallery: Owner Update (visibility, title) ───
+    if (url.pathname.match(/^\/api\/gallery\/[^/]+$/) && request.method === 'PATCH') {
+      if (!env.DB) return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
+      }
+
+      const designId = url.pathname.split('/api/gallery/')[1];
+      const { user_id: userId, session_token: sessionToken, visibility: newVis, title: newTitle } = body;
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+      if (!isDevBypass(request, env)) {
+        if (!userId || !sessionToken) return new Response(JSON.stringify({ error: 'missing_auth' }), { status: 400, headers });
+        const valid = await verifySessionFlex(env, sessionToken, ip, { userId });
+        if (!valid) return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+      }
+
+      try {
+        const row = await env.DB.prepare('SELECT user_id FROM design_tokens WHERE id = ?').bind(designId).first();
+        if (!row) return new Response(JSON.stringify({ error: 'not_found' }), { status: 404, headers });
+        if (row.user_id !== userId) return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers });
+
+        const updates = [];
+        const vals = [];
+        if (newVis && (newVis === 'public' || newVis === 'private')) { updates.push('visibility = ?'); vals.push(newVis); }
+        if (typeof newTitle === 'string') { updates.push('title = ?'); vals.push(newTitle); }
+        if (updates.length === 0) return new Response(JSON.stringify({ error: 'no_changes' }), { status: 400, headers });
+
+        await env.DB.prepare(`UPDATE design_tokens SET ${updates.join(', ')} WHERE id = ?`).bind(...vals, designId).run();
+        return new Response(JSON.stringify({ updated: true }), { headers });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'update_failed' }), { status: 500, headers });
+      }
+    }
+
+    // ─── Gallery: Owner Delete ───
+    if (url.pathname.match(/^\/api\/gallery\/[^/]+$/) && request.method === 'DELETE') {
+      if (!env.DB) return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
+      }
+
+      const designId = url.pathname.split('/api/gallery/')[1];
+      const { user_id: userId, session_token: sessionToken } = body;
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+      if (!isDevBypass(request, env)) {
+        if (!userId || !sessionToken) return new Response(JSON.stringify({ error: 'missing_auth' }), { status: 400, headers });
+        const valid = await verifySessionFlex(env, sessionToken, ip, { userId });
+        if (!valid) return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+      }
+
+      try {
+        const row = await env.DB.prepare('SELECT user_id, image_key FROM design_tokens WHERE id = ?').bind(designId).first();
+        if (!row) return new Response(JSON.stringify({ error: 'not_found' }), { status: 404, headers });
+        if (row.user_id !== userId) return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers });
+
+        // Soft delete
+        await env.DB.prepare("UPDATE design_tokens SET deleted_at = datetime('now') WHERE id = ?").bind(designId).run();
+
+        return new Response(JSON.stringify({ deleted: true }), { headers });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'delete_failed' }), { status: 500, headers });
+      }
+    }
+
+    // ─── Gallery: Serve R2 image (owner only) ───
+    if (url.pathname.match(/^\/api\/gallery\/[^/]+\/image$/) && request.method === 'GET') {
+      if (!env.DB || !env.IMAGES) return new Response(JSON.stringify({ error: 'not_configured' }), { status: 503, headers });
+
+      const designId = url.pathname.split('/api/gallery/')[1].replace('/image', '');
+      const userId = url.searchParams.get('user_id') || '';
+      const sessionToken = url.searchParams.get('session_token') || '';
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+      try {
+        const row = await env.DB.prepare('SELECT user_id, image_key FROM design_tokens WHERE id = ?').bind(designId).first();
+        if (!row || !row.image_key) return new Response(JSON.stringify({ error: 'not_found' }), { status: 404, headers });
+
+        // Owner check
+        if (!isDevBypass(request, env)) {
+          if (row.user_id !== userId) return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers });
+          const valid = await verifySessionFlex(env, sessionToken, ip, { userId });
+          if (!valid) return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+        }
+
+        const obj = await env.IMAGES.get(row.image_key);
+        if (!obj) return new Response(JSON.stringify({ error: 'image_not_found' }), { status: 404, headers });
+
+        return new Response(obj.body, {
+          headers: {
+            ...headers,
+            'Content-Type': obj.httpMetadata?.contentType || 'image/png',
+            'Cache-Control': 'private, max-age=3600',
+          },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'image_error', message: err.message }), { status: 500, headers });
+      }
+    }
+
+    // ─── Gallery: Backfill color_family/is_dark for existing rows (dev/admin only) ───
+    if (url.pathname === '/api/gallery/backfill' && request.method === 'POST') {
+      if (!isDevBypass(request, env)) {
+        return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers });
+      }
+      if (!env.DB) return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+
+      try {
+        const rows = await env.DB.prepare(
+          "SELECT id, tokens_json FROM design_tokens WHERE color_family = '' OR color_family IS NULL"
+        ).all();
+        let updated = 0;
+        for (const row of (rows.results || [])) {
+          try {
+            const tokens = JSON.parse(row.tokens_json || '{}');
+            const primaryColor = tokens?.colors?.primary || '';
+            const colorFamily = computeColorFamily(primaryColor);
+            const isDark = tokens?.isDark ? 1 : 0;
+            const title = '';
+            await env.DB.prepare(
+              'UPDATE design_tokens SET primary_color = ?, color_family = ?, is_dark = ?, visibility = COALESCE(NULLIF(visibility, \'\'), \'public\') WHERE id = ?'
+            ).bind(primaryColor, colorFamily, isDark, row.id).run();
+            updated++;
+          } catch { /* skip bad rows */ }
+        }
+        return new Response(JSON.stringify({ backfilled: updated, total: (rows.results || []).length }), { headers });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'backfill_failed', message: err.message }), { status: 500, headers });
       }
     }
 

@@ -141,6 +141,20 @@ export const I = {
     text:     { zh:'內文預設色',       en:'Default body color',    ja:'本文デフォルト色' },
     border:   { zh:'分隔線、外框',     en:'Dividers, outlines',    ja:'区切り線・枠線' },
   },
+  gallery: {
+    title: { zh: 'Gallery', en: 'Gallery', ja: 'ギャラリー' },
+    subtitle: { zh: '探索社群創作的 Design System', en: 'Explore design systems created by the community', ja: 'コミュニティが作成したデザインシステムを探索' },
+    loadMore: { zh: '載入更多', en: 'Load More', ja: 'もっと見る' },
+    empty: { zh: '尚無設計作品', en: 'No designs yet', ja: 'まだデザインがありません' },
+    myDesigns: { zh: '我的設計', en: 'My Designs', ja: 'マイデザイン' },
+    latest: { zh: '最新', en: 'Latest', ja: '最新' },
+    mostDownloads: { zh: '最多下載', en: 'Most Downloads', ja: 'ダウンロード順' },
+    backToGallery: { zh: '返回 Gallery', en: 'Back to Gallery', ja: 'ギャラリーに戻る' },
+    notFound: { zh: '找不到此設計', en: 'Design not found', ja: 'デザインが見つかりません' },
+    communityDesigns: { zh: '社群作品', en: 'Community Designs', ja: 'コミュニティ作品' },
+    viewGallery: { zh: '查看 Gallery', en: 'View Gallery', ja: 'ギャラリーを見る' },
+    anonymous: { zh: '匿名', en: 'Anonymous', ja: '匿名' },
+  },
 };
 
 export function t(obj, lang = 'en') {

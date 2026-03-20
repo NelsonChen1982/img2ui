@@ -21,6 +21,13 @@ CREATE TABLE IF NOT EXISTS design_tokens (
   annotations_json TEXT DEFAULT '[]',
   holistic_json TEXT DEFAULT '{}',
   provider TEXT DEFAULT '',
+  visibility TEXT DEFAULT 'public',       -- 'public' | 'private'
+  title TEXT DEFAULT '',                  -- user-editable design name
+  primary_color TEXT DEFAULT '',          -- hex of primary color for display
+  color_family TEXT DEFAULT '',           -- 'red'|'orange'|'yellow'|'green'|'cyan'|'blue'|'purple'|'neutral'
+  is_dark INTEGER DEFAULT 0,             -- 0 = light, 1 = dark
+  download_count INTEGER DEFAULT 0,
+  deleted_at TEXT DEFAULT NULL,             -- soft delete timestamp
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -96,3 +103,8 @@ CREATE INDEX IF NOT EXISTS idx_credits_user ON credits_ledger(user_id);
 CREATE INDEX IF NOT EXISTS idx_credits_type_date ON credits_ledger(user_id, type, created_at);
 CREATE INDEX IF NOT EXISTS idx_anon_ip ON anon_usage(ip);
 CREATE INDEX IF NOT EXISTS idx_tokens_user ON design_tokens(user_id);
+
+-- Indexes (gallery)
+CREATE INDEX IF NOT EXISTS idx_tokens_gallery ON design_tokens(visibility, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tokens_color_family ON design_tokens(color_family);
+CREATE INDEX IF NOT EXISTS idx_tokens_downloads ON design_tokens(visibility, download_count DESC);

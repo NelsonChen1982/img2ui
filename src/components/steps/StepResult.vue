@@ -47,6 +47,26 @@ function saveTitle() {
 const copyLabel = ref('')
 const jsonExpanded = ref(false)
 const isMobile = ref(false)
+const designVisibility = ref('public')
+
+async function toggleVisibility() {
+  const newVis = designVisibility.value === 'public' ? 'private' : 'public'
+  designVisibility.value = newVis
+  const apiBase = import.meta.env.VITE_API_BASE || settingsStore.devSettings?.base || ''
+  const designId = pipelineStore.currentDesignId
+  if (!apiBase || !designId || !authStore.isAuthenticated) return
+  try {
+    const hdrs = { 'Content-Type': 'application/json' }
+    if (import.meta.env.DEV && import.meta.env.VITE_DEV_BYPASS_KEY) hdrs['x-dev-key'] = import.meta.env.VITE_DEV_BYPASS_KEY
+    await fetch(`${apiBase}/api/gallery/${designId}`, {
+      method: 'PATCH',
+      headers: hdrs,
+      body: JSON.stringify({ user_id: authStore.user.id, session_token: authStore.sessionToken, visibility: newVis }),
+    })
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('[img2ui] visibility toggle failed:', err.message)
+  }
+}
 onMounted(async () => {
   isMobile.value = window.innerWidth <= 768
   window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 768 })
@@ -76,6 +96,8 @@ async function handleGenerationCredit() {
             annotations: pipelineStore.annotations,
             holistic: pipelineStore.holisticResult || {},
             provider: settingsStore.selectedProvider,
+            title: pipelineStore.uiKitName || '',
+            visibility: designVisibility.value,
           }),
         })
         const data = await resp.json()
@@ -106,6 +128,8 @@ async function handleGenerationCredit() {
             annotations: pipelineStore.annotations,
             holistic: pipelineStore.holisticResult || {},
             provider: settingsStore.selectedProvider,
+            title: pipelineStore.uiKitName || '',
+            visibility: 'public',
           }),
         })
         const data = await resp.json()
@@ -217,7 +241,7 @@ function setTheme(theme) {
       </button>
     </div>
 
-    <!-- Theme Tab Bar -->
+    <!-- Theme Tab Bar + Visibility -->
     <div class="theme-bar" v-if="ds?.colors?.primary">
       <div class="theme-tabs">
         <button
@@ -237,6 +261,16 @@ function setTheme(theme) {
           {{ t(I.s7.darkTab) }}
         </button>
       </div>
+      <!-- Visibility toggle (logged-in only, after save) -->
+      <button
+        v-if="authStore.isAuthenticated && pipelineStore.currentDesignId"
+        class="visibility-toggle"
+        @click="toggleVisibility"
+        :title="designVisibility === 'public' ? 'Click to make private' : 'Click to make public'"
+      >
+        <i :class="designVisibility === 'public' ? 'fa-duotone fa-thin fa-globe' : 'fa-duotone fa-thin fa-lock'" style="font-size:12px;"></i>
+        <span>{{ designVisibility === 'public' ? 'Public' : 'Private' }}</span>
+      </button>
     </div>
 
     <!-- Two-column layout: UI Kit + JSON Panel -->
@@ -795,5 +829,25 @@ button:active {
 
 .json-pre::-webkit-scrollbar-thumb:hover {
   background: #ccc;
+}
+
+/* ── Visibility Toggle ── */
+.visibility-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all .15s;
+}
+.visibility-toggle:hover {
+  background: #f5f5f5;
+  border-color: #ccc;
 }
 </style>
