@@ -9,6 +9,8 @@ import { ha, isLight } from '../../services/colorUtils'
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
 
+const MAX_ANNOTATIONS = 5
+
 const canvasRef = ref(null)
 const drawing = ref(false)
 const sx = ref(0)
@@ -92,6 +94,11 @@ function setupCanvas(canvas) {
     const h = Math.abs(ey - sy.value)
 
     if (w < 12 || h < 12) {
+      redrawCanvas(canvas)
+      return
+    }
+
+    if (pipelineStore.annotations.length >= MAX_ANNOTATIONS) {
       redrawCanvas(canvas)
       return
     }
@@ -304,6 +311,7 @@ function clearAnnotations() {
               :key="item.id"
               :data-type="item.id"
               class="type-btn"
+              :disabled="pipelineStore.annotations.length >= MAX_ANNOTATIONS"
               @click="selectType({ id: item.id, label: item.label, color: category.color })"
               :style="{
                 '--tc': category.color,
@@ -314,9 +322,10 @@ function clearAnnotations() {
                 border: '1px solid var(--tc-alpha)',
                 borderRadius: '6px',
                 background: 'transparent',
-                color: 'var(--tc)',
-                cursor: 'pointer',
+                color: pipelineStore.annotations.length >= MAX_ANNOTATIONS ? '#ccc' : 'var(--tc)',
+                cursor: pipelineStore.annotations.length >= MAX_ANNOTATIONS ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s',
+                opacity: pipelineStore.annotations.length >= MAX_ANNOTATIONS ? 0.4 : 1,
               }"
             >
               <i :class="'fa-duotone fa-thin ' + item.fa" style="opacity: 0.5; margin-right: 4px; font-size: 11px;"></i>
@@ -433,7 +442,7 @@ function clearAnnotations() {
     </div>
 
     <!-- Annotations List -->
-    <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px">
+    <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
       <template v-if="pipelineStore.annotations.length === 0">
         <span style="font-size: 11px; color: #bbb; font-style: italic">
           {{ t(I.s5.none) }}
@@ -490,6 +499,13 @@ function clearAnnotations() {
             {{ anno.visual.inferredVariant }}
           </span>
           <i class="fa-duotone fa-thin fa-xmark" style="margin-left:3px;font-size:10px;"></i>
+        </span>
+        <span
+          v-if="pipelineStore.annotations.length >= MAX_ANNOTATIONS"
+          style="font-size: 11px; color: #f59e0b; background: #fefce8; border: 1px solid #fde68a; border-radius: 4px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px;"
+        >
+          <i class="fa-duotone fa-thin fa-triangle-exclamation" style="font-size: 10px;"></i>
+          {{ t({ zh: '已達單張圖標註上限（5個）', en: 'Annotation limit reached (5 per image)', ja: '注釈の上限に達しました（1枚につき5個）' }) }}
         </span>
       </template>
     </div>

@@ -79,9 +79,26 @@ watch(() => authStore.authModalVisible, (visible) => {
         <h2 style="font-size:22px;font-weight:700;color:#111;margin:0 0 6px">
           {{ t(I.title) }}
         </h2>
-        <p style="font-size:14px;color:#888;margin:0 0 20px">
+        <p style="font-size:14px;color:#888;margin:0 0 12px">
           {{ t(I.subtitle) }}
         </p>
+
+        <!-- Free pass used notice -->
+        <div
+          v-if="authStore.authModalReason === 'second_use'"
+          style="background:#fef9ec;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:14px;text-align:left"
+        >
+          <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:3px">
+            {{ t({ zh: '今日免費體驗額度已使用', en: "Today's free trial already used", ja: '本日の無料体験は使用済みです' }) }}
+          </div>
+          <div style="font-size:11px;color:#a16207;line-height:1.6">
+            {{ t({ zh: '此 IP 今日已使用過一次免費體驗', en: 'This IP has used the free trial today', ja: 'このIPは本日すでに無料体験を使用しました' }) }}
+            <span v-if="authStore.anonIp" style="font-family:monospace;background:#fef3c7;padding:1px 5px;border-radius:3px;margin-left:2px">{{ authStore.anonIp }}</span>
+          </div>
+          <div style="font-size:11px;color:#b45309;margin-top:4px">
+            {{ t({ zh: '明日可再次免費體驗，或登入獲得 10 點額度', en: 'Come back tomorrow, or sign in for 10 free credits', ja: '明日また無料体験できます。またはログインで10クレジット獲得' }) }}
+          </div>
+        </div>
 
         <!-- Bonus highlight -->
         <div style="background:linear-gradient(135deg,#f0f4ff,#fef3f0);border-radius:12px;padding:14px 16px;margin-bottom:20px">

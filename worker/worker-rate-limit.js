@@ -871,14 +871,16 @@ export default {
     // ─── Anonymous Free Pass Check ───
     if (url.pathname === '/api/anon-check' && request.method === 'GET') {
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      const used = await env.RATE_LIMIT.get(`anon:ip:${ip}`);
-      return new Response(JSON.stringify({ used: !!used }), { headers });
+      const today = todayKey();
+      const used = await env.RATE_LIMIT.get(`anon:ip:${ip}:${today}`);
+      return new Response(JSON.stringify({ used: !!used, ip }), { headers });
     }
 
     // ─── Mark Anonymous Free Pass Used ───
     if (url.pathname === '/api/anon-check' && request.method === 'POST') {
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      await env.RATE_LIMIT.put(`anon:ip:${ip}`, todayKey()); // no TTL = permanent
+      const today = todayKey();
+      await env.RATE_LIMIT.put(`anon:ip:${ip}:${today}`, '1', { expirationTtl: 86400 });
       return new Response(JSON.stringify({ marked: true }), { headers });
     }
 
@@ -930,8 +932,8 @@ export default {
 
       // Rate limiting: logged-in users use credits (checked client-side), anonymous uses IP check
       if (!devBypass && !userId) {
-        // Anonymous: check if free pass already used
-        const anonUsed = await env.RATE_LIMIT.get(`anon:ip:${ip}`);
+        // Anonymous: check if free pass already used today
+        const anonUsed = await env.RATE_LIMIT.get(`anon:ip:${ip}:${todayKey()}`);
         if (anonUsed) {
           return new Response(JSON.stringify({ error: 'login_required', message: 'Free trial used. Please sign in.' }), { status: 403, headers });
         }

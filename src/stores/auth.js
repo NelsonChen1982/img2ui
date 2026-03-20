@@ -30,22 +30,27 @@ export const useAuthStore = defineStore('auth', () => {
   const authModalVisible = ref(false);
   const authModalReason = ref(''); // 'second_use' | 'download' | ''
   const loading = ref(false);
+  const anonIp = ref(''); // IP shown in gate message
 
   // Computed
   const isAuthenticated = computed(() => !!user.value);
 
   /**
-   * Check if anonymous user has used their free pass
+   * Check if anonymous user has used their free pass today
    */
   function hasUsedFreePass() {
-    return localStorage.getItem('pic2ui_free_used') === 'true';
+    const stored = localStorage.getItem('pic2ui_free_used');
+    if (!stored) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return stored === today;
   }
 
   /**
-   * Mark anonymous free pass as used (client + server)
+   * Mark anonymous free pass as used today (client + server)
    */
   async function markFreePassUsed() {
-    localStorage.setItem('pic2ui_free_used', 'true');
+    const today = new Date().toISOString().slice(0, 10);
+    localStorage.setItem('pic2ui_free_used', today);
     if (API_BASE) {
       try {
         await fetch(`${API_BASE}/api/anon-check`, { method: 'POST', headers: getDevHeaders() });
@@ -55,14 +60,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * Check server-side anonymous usage (fallback if localStorage cleared)
+   * @returns {{ used: boolean, ip?: string }}
    */
   async function checkAnonServer() {
-    if (!API_BASE) return false;
+    if (!API_BASE) return { used: false };
     try {
       const resp = await fetch(`${API_BASE}/api/anon-check`, { headers: getDevHeaders() });
       const data = await resp.json();
-      return data.used === true;
-    } catch { return false; }
+      return { used: data.used === true, ip: data.ip };
+    } catch { return { used: false }; }
   }
 
   /**
@@ -77,9 +83,10 @@ export const useAuthStore = defineStore('auth', () => {
     }
     // Anonymous
     if (!hasUsedFreePass()) {
-      const serverUsed = await checkAnonServer();
+      const { used: serverUsed, ip } = await checkAnonServer();
       if (!serverUsed) return { allowed: true, isFreePass: true };
       localStorage.setItem('pic2ui_free_used', 'true');
+      if (ip) anonIp.value = ip;
     }
     return { allowed: false, reason: 'login_required' };
   }
@@ -270,6 +277,7 @@ export const useAuthStore = defineStore('auth', () => {
     authModalVisible,
     authModalReason,
     loading,
+    anonIp,
 
     // Computed
     isAuthenticated,
