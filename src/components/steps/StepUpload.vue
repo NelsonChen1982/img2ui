@@ -400,7 +400,7 @@ async function handleNext() {
   padding: 10px 8px;
   border-radius: 10px;
   background: #f8f8f8;
-  gap: 4px;
+  gap: 2px;
 }
 
 .feature-icon {

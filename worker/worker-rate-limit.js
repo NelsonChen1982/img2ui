@@ -571,6 +571,7 @@ async function checkAndIncrementRate(env, ip, email, headers, limit = DAILY_LIMI
 // ─── D1 Helpers ───
 
 async function upsertEmail(db, email, ip) {
+  if (!email) return; // skip for anonymous users
   const emailNorm = normalizeEmail(email);
   const existing = await db.prepare('SELECT id FROM emails WHERE email = ?').bind(emailNorm).first();
   if (existing) {
@@ -1010,15 +1011,13 @@ export default {
     // ─── Get User History from D1 (session token required) ───
     if (url.pathname === '/api/history' && request.method === 'GET') {
       const email = url.searchParams.get('email');
+      const userId = url.searchParams.get('user_id');
       const sessionToken = url.searchParams.get('session_token');
-      if (!email || !isValidEmail(email)) {
-        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers });
-      }
 
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
       if (!isDevBypass(request, env)) {
-        const validSession = await verifySession(env, sessionToken, email, ip);
-        if (!validSession) {
+        const valid = await verifySessionFlex(env, sessionToken, ip, { userId, email });
+        if (!valid) {
           return new Response(JSON.stringify({ error: 'invalid_session', message: 'Session expired or invalid' }), { status: 401, headers });
         }
       }
@@ -1047,15 +1046,12 @@ export default {
         return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
       }
 
-      const { image_base64: imageBase64, email, provider: reqProvider, session_token: sessionToken } = body;
-      if (!email || !isValidEmail(email)) {
-        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers });
-      }
+      const { image_base64: imageBase64, email, provider: reqProvider, session_token: sessionToken, user_id: userId } = body;
 
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
       if (!isDevBypass(request, env)) {
-        const validSession = await verifySession(env, sessionToken, email, ip);
-        if (!validSession) {
+        const valid = await verifySessionFlex(env, sessionToken, ip, { userId, email });
+        if (!valid) {
           return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
         }
       }
@@ -1106,17 +1102,14 @@ Only return valid JSON, no markdown.`;
         return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
       }
 
-      const { image_base64: imageBase64, email, prompt: customPrompt, componentType, provider: reqProvider, session_token: sessionToken } = body;
-      if (!email || !isValidEmail(email)) {
-        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers });
-      }
+      const { image_base64: imageBase64, email, prompt: customPrompt, componentType, provider: reqProvider, session_token: sessionToken, user_id: userId } = body;
 
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
       const devBypassAC = isDevBypass(request, env);
 
       if (!devBypassAC) {
-        const validSession = await verifySession(env, sessionToken, email, ip);
-        if (!validSession) {
+        const valid = await verifySessionFlex(env, sessionToken, ip, { userId, email });
+        if (!valid) {
           return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
         }
       }

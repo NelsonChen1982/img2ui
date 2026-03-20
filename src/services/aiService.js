@@ -772,6 +772,7 @@ async function fallbackIndividualAnalysis(
             email: emailToSend,
             provider: window.selectedProvider,
             session_token: sessionToken,
+            user_id: getUserId?.() || '',
           }),
         });
         devLog(`[img2ui] 📥 Worker response (individual): status=${resp.status}`)
@@ -838,6 +839,7 @@ export async function analyzeAnnotationsWithAI(context) {
     getDevKeys,
     getStoredEmail,
     getSessionToken,
+    getUserId,
     COMP_META,
     COMP_SKELETON,
     VARIATION_AXIS,
@@ -873,6 +875,7 @@ export async function analyzeAnnotationsWithAI(context) {
           email,
           provider: window.selectedProvider,
           session_token: sessionToken,
+          user_id: getUserId?.() || '',
         }),
       });
       devLog(`[img2ui] 📥 Worker response (grouped): status=${resp.status}`)
@@ -1107,6 +1110,7 @@ export async function analyzeHolisticDesign(context) {
     getDevKeys,
     getStoredEmail,
     getSessionToken,
+    getUserId,
     knownComponentIds,
     onResult,
   } = context;
@@ -1141,6 +1145,7 @@ export async function analyzeHolisticDesign(context) {
           email: getStoredEmail?.() || '',
           provider: window.selectedProvider,
           session_token: getSessionToken?.() || '',
+          user_id: getUserId?.() || '',
         }),
       });
       devLog(`[img2ui] 📥 Worker response (holistic): status=${resp.status}`)

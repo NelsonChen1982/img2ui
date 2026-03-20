@@ -121,8 +121,8 @@ function handleModelChange(value) {
   <header style="background:#fff;border-bottom:1px solid #e8e8e8;flex-shrink:0;">
     <!-- Row 1: logo + brand + dropdowns -->
     <div class="header-row">
-      <!-- Left: logo + brand (always visible) -->
-      <div style="display:flex;align-items:center;gap:8px;">
+      <!-- Left: logo + brand (always visible, click to go home) -->
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer" @click="pipelineStore.restartPipeline()">
         <img :src="logoImg" alt="img2ui" style="width:28px;height:28px;border-radius:7px;">
         <span class="brand-title" style="font-size:15px;font-weight:800;letter-spacing:.06em;color:#222;">img2ui</span>
       </div>

@@ -201,7 +201,7 @@ function closeExportOnBackdrop(e) {
     <!-- ═══ Steps 3 & 5: standard back / center / next ═══ -->
     <template v-if="!isStep7">
       <div class="af-left">
-        <span class="af-version">Beta v0.1</span>
+        <span class="af-version">Beta v0.2</span>
         <span v-if="centerText" class="af-annotation-count">{{ centerText }}</span>
       </div>
 
@@ -224,13 +224,13 @@ function closeExportOnBackdrop(e) {
         </button>
       </div>
 
-      <div class="af-mobile-version">Beta v0.1</div>
+      <div class="af-mobile-version">Beta v0.2</div>
     </template>
 
     <!-- ═══ Step 7: edit/restart on left, export on right ═══ -->
     <template v-else>
       <div class="af-left">
-        <span class="af-version">Beta v0.1</span>
+        <span class="af-version">Beta v0.2</span>
       </div>
 
       <div class="af-right">
@@ -242,7 +242,7 @@ function closeExportOnBackdrop(e) {
         </button>
       </div>
 
-      <div class="af-mobile-version">Beta v0.1</div>
+      <div class="af-mobile-version">Beta v0.2</div>
 
       <!-- Export modal overlay -->
       <Teleport to="body">

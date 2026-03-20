@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
+import { useAuthStore } from '../../stores/auth'
 import { I } from '../../data/i18n'
 import { analyzeAnnotationsWithAI, analyzeHolisticDesign } from '../../services/aiService'
 import { COMP_META } from '../../data/compMeta'
@@ -11,6 +12,7 @@ import { darken } from '../../services/colorUtils'
 
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
+const authStore = useAuthStore()
 
 const progress = ref(0)
 const tasks = ref([])
@@ -125,8 +127,9 @@ async function startProcessing() {
             openai: settingsStore.devSettings?.openai || '',
             gemini: settingsStore.devSettings?.gemini || '',
           }),
-          getStoredEmail: () => settingsStore.email || '',
-          getSessionToken: () => pipelineStore.sessionToken || '',
+          getStoredEmail: () => authStore.user?.email || settingsStore.email || '',
+          getSessionToken: () => authStore.sessionToken || pipelineStore.sessionToken || '',
+          getUserId: () => authStore.user?.id || '',
           COMP_META,
           COMP_SKELETON,
           VARIATION_AXIS,
@@ -150,8 +153,9 @@ async function startProcessing() {
           openai: settingsStore.devSettings?.openai || '',
           gemini: settingsStore.devSettings?.gemini || '',
         }),
-        getStoredEmail: () => settingsStore.email || '',
-        getSessionToken: () => pipelineStore.sessionToken || '',
+        getStoredEmail: () => authStore.user?.email || settingsStore.email || '',
+        getSessionToken: () => authStore.sessionToken || pipelineStore.sessionToken || '',
+        getUserId: () => authStore.user?.id || '',
         knownComponentIds: ALL_COMP_IDS,
         onResult: (entry) => {
           analysisResults.value = [...analysisResults.value, entry]
@@ -172,31 +176,7 @@ async function startProcessing() {
     // Build UI Kit
     pipelineStore.buildDS()
 
-    // Save result to D1 (non-blocking)
-    const apiBase = window.PIC2UI_API_BASE || ''
-    if (apiBase && settingsStore.email) {
-      try {
-        const saveHdrs = { 'Content-Type': 'application/json' }
-        if (import.meta.env.DEV && import.meta.env.VITE_DEV_BYPASS_KEY) saveHdrs['x-dev-key'] = import.meta.env.VITE_DEV_BYPASS_KEY
-        const resp = await fetch(`${apiBase}/api/save-result`, {
-          method: 'POST',
-          headers: saveHdrs,
-          body: JSON.stringify({
-            email: settingsStore.email,
-            image_key: pipelineStore.imageKey || '',
-            tokens: pipelineStore.DS,
-            annotations: pipelineStore.annotations,
-            holistic: pipelineStore.holisticResult,
-            provider: window.selectedProvider || '',
-            session_token: pipelineStore.sessionToken || '',
-          }),
-        })
-        const data = await resp.json()
-        if (import.meta.env.DEV) console.log('[img2ui] D1 save result:', data)
-      } catch (err) {
-        if (import.meta.env.DEV) console.warn('[img2ui] D1 save failed (continuing):', err.message)
-      }
-    }
+    // Save result + credit deduction is handled in StepResult on Kit page render
 
     setTimeout(() => {
       pipelineStore.showStep(7)
