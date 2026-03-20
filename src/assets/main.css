@@ -742,15 +742,50 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
     text-transform: uppercase;
   }
 
-  .header-row {
-    flex-direction: column;
-    align-items: center;
-    height: auto;
-    padding: 10px 16px;
-    gap: 6px;
+  header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 900;
   }
 
+  .header-row {
+    height: 50px;
+    padding: 0 16px;
+  }
 
+  main {
+    padding-top: 66px !important;
+  }
+
+  .header-controls-desktop {
+    display: none !important;
+  }
+
+  .header-hamburger {
+    display: flex !important;
+  }
+
+  .mobile-drawer {
+    animation: drawerSlideIn .25s cubic-bezier(.32,.72,0,1) forwards;
+  }
+
+  @keyframes drawerSlideIn {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+  }
+}
+
+.toast-enter-active { animation: toastIn .2s ease; }
+.toast-leave-active { animation: toastIn .2s ease reverse; }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@media (max-width: 768px) {
   .wiz-bar {
     justify-content: center;
     padding: 0 12px;
@@ -812,7 +847,6 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
   .kit-section {
     padding: 12px;
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   #ui-kit-render {

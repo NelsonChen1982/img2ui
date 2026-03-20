@@ -1,11 +1,35 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useSettingsStore } from '../../stores/settings'
 
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const open = ref(false)
+const triggerEl = ref(null)
+const dropdownPos = ref({ top: 0, right: 0, left: null })
+
+function updatePos() {
+  if (!triggerEl.value) return
+  const rect = triggerEl.value.getBoundingClientRect()
+  const menuWidth = 180
+  const margin = 8
+  const vw = window.innerWidth
+
+  // Prefer aligning to right edge of trigger
+  // If that would push menu off-screen left, align to left edge instead
+  const rightAligned = vw - rect.right
+  if (rightAligned + menuWidth + margin <= vw) {
+    dropdownPos.value = { top: rect.bottom + 4, right: Math.max(margin, rightAligned), left: null }
+  } else {
+    // Fallback: align left edge of menu to left edge of trigger, clamped
+    const leftAligned = Math.min(rect.left, vw - menuWidth - margin)
+    dropdownPos.value = { top: rect.bottom + 4, left: Math.max(margin, leftAligned), right: null }
+  }
+}
+
+onMounted(() => window.addEventListener('scroll', close, true))
+onBeforeUnmount(() => window.removeEventListener('scroll', close, true))
 const historyOpen = ref(false)
 const historyLoading = ref(false)
 const historyItems = ref([])
@@ -30,7 +54,10 @@ const typeLabels = {
   purchase: { zh: '購買', en: 'Purchase', ja: '購入' },
 }
 
-function toggle() { open.value = !open.value }
+function toggle() {
+  if (!open.value) updatePos()
+  open.value = !open.value
+}
 function close() { open.value = false }
 function handleLogout() {
   authStore.logout()
@@ -76,9 +103,10 @@ async function openHistory() {
 </script>
 
 <template>
-  <div style="position:relative" @mouseleave="close">
+  <div style="position:relative">
     <!-- User card trigger -->
     <button
+      ref="triggerEl"
       @click="toggle"
       style="display:flex;align-items:center;gap:6px;padding:3px 8px 3px 4px;border-radius:6px;border:1px solid #ddd;background:#fff;cursor:pointer;transition:all .2s"
     >
@@ -102,44 +130,66 @@ async function openHistory() {
       </span>
     </button>
 
-    <!-- Dropdown -->
+  </div>
+
+  <!-- Dropdown via Teleport — avoids overflow/z-index issues in WizardBar -->
+  <Teleport to="body">
     <div
       v-if="open"
-      style="position:absolute;right:0;top:100%;background:#fff;border-radius:10px;border:1px solid #e8e8e8;box-shadow:0 8px 24px rgba(0,0,0,.08);min-width:180px;padding:6px 0;padding-top:12px;z-index:100"
+      style="position:fixed;inset:0;z-index:9990"
+      @click="close"
     >
-      <!-- User info -->
-      <div style="padding:6px 14px 8px;border-bottom:1px solid #f0f0f0">
-        <div style="font-size:11px;font-weight:600;color:#333">{{ authStore.user?.name || '' }}</div>
-        <div style="font-size:10px;color:#aaa;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ authStore.user?.email || '' }}</div>
-      </div>
-
-      <!-- Credits -->
-      <div style="padding:8px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div style="font-size:10px;color:#999">{{ t(I.credits) }}</div>
-          <div style="font-size:16px;font-weight:700;color:#333">{{ authStore.creditsBalance }}</div>
+      <div
+        :style="{
+          position: 'fixed',
+          top: dropdownPos.top + 'px',
+          ...(dropdownPos.right != null ? { right: dropdownPos.right + 'px' } : {}),
+          ...(dropdownPos.left != null ? { left: dropdownPos.left + 'px' } : {}),
+          background: '#fff',
+          borderRadius: '10px',
+          border: '1px solid #e8e8e8',
+          boxShadow: '0 8px 24px rgba(0,0,0,.08)',
+          minWidth: '180px',
+          padding: '6px 0',
+          paddingTop: '12px',
+          zIndex: 9991,
+        }"
+        @click.stop
+      >
+        <!-- User info -->
+        <div style="padding:6px 14px 8px;border-bottom:1px solid #f0f0f0">
+          <div style="font-size:11px;font-weight:600;color:#333">{{ authStore.user?.name || '' }}</div>
+          <div style="font-size:10px;color:#aaa;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ authStore.user?.email || '' }}</div>
         </div>
+
+        <!-- Credits -->
+        <div style="padding:8px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:10px;color:#999">{{ t(I.credits) }}</div>
+            <div style="font-size:16px;font-weight:700;color:#333">{{ authStore.creditsBalance }}</div>
+          </div>
+        </div>
+
+        <!-- History -->
+        <button
+          @click="openHistory"
+          style="width:100%;text-align:left;padding:8px 14px;background:none;border:none;font-size:11px;color:#666;cursor:pointer;transition:color .2s;border-bottom:1px solid #f0f0f0"
+        >
+          <i class="fa-duotone fa-thin fa-clock-rotate-left" style="margin-right:5px"></i>
+          {{ t(I.history) }}
+        </button>
+
+        <!-- Logout -->
+        <button
+          @click="handleLogout"
+          style="width:100%;text-align:left;padding:8px 14px;background:none;border:none;font-size:11px;color:#888;cursor:pointer;transition:color .2s"
+        >
+          <i class="fa-duotone fa-thin fa-arrow-right-from-bracket" style="margin-right:5px"></i>
+          {{ t(I.logout) }}
+        </button>
       </div>
-
-      <!-- History -->
-      <button
-        @click="openHistory"
-        style="width:100%;text-align:left;padding:8px 14px;background:none;border:none;font-size:11px;color:#666;cursor:pointer;transition:color .2s;border-bottom:1px solid #f0f0f0"
-      >
-        <i class="fa-duotone fa-thin fa-clock-rotate-left" style="margin-right:5px"></i>
-        {{ t(I.history) }}
-      </button>
-
-      <!-- Logout -->
-      <button
-        @click="handleLogout"
-        style="width:100%;text-align:left;padding:8px 14px;background:none;border:none;font-size:11px;color:#888;cursor:pointer;transition:color .2s"
-      >
-        <i class="fa-duotone fa-thin fa-arrow-right-from-bracket" style="margin-right:5px"></i>
-        {{ t(I.logout) }}
-      </button>
     </div>
-  </div>
+  </Teleport>
 
   <!-- Credits History Modal -->
   <Teleport to="body">

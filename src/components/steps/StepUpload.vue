@@ -34,7 +34,7 @@ const isCtaDisabled = computed(() =>
 
 // i18n for this page
 const IL = {
-  ctaFree: { zh: '免費開始辨識', en: 'Start Free Analysis', ja: '無料で分析開始' },
+  ctaFree: { zh: '開始辨識設計', en: 'Analyze My Design', ja: 'デザインを分析する' },
   ctaStart: { zh: '開始辨識', en: 'Start Analysis', ja: '分析開始' },
   bonusTitle: { zh: '註冊即送 10 點免費額度', en: 'Get 10 free credits on signup', ja: '登録で10クレジットプレゼント' },
   benefit1: { zh: '保存歷史設計', en: 'Save your designs', ja: 'デザインを保存' },
@@ -60,7 +60,10 @@ const features = computed(() => {
   ]
 })
 
-const ctaLabel = computed(() => authStore.isAuthenticated ? t(IL.ctaStart) : t(IL.ctaFree))
+const ctaLabel = computed(() => {
+  if (!pipelineStore.uploadedImage) return t({ zh: '上傳圖片後即可辨識', en: 'Upload an image to start', ja: '画像をアップロードしてください' })
+  return authStore.isAuthenticated ? t(IL.ctaStart) : t(IL.ctaFree)
+})
 
 const creditsNotice = computed(() => {
   if (!authStore.isAuthenticated) return ''
@@ -197,8 +200,8 @@ async function handleNext() {
 
 <template>
   <div class="step-upload">
-    <!-- LEFT COLUMN: Intro -->
-    <div class="upload-left">
+    <!-- HERO: logo + description (spans full width on mobile, left col on desktop) -->
+    <div class="upload-hero">
       <img :src="logoImg" alt="img2ui" style="width:72px;height:72px;border-radius:18px;box-shadow:0 4px 16px rgba(0,0,0,.08);margin-bottom:20px">
 
       <h1 style="font-size:36px;font-weight:800;color:#111;margin:0 0 8px;line-height:1.15">
@@ -210,9 +213,12 @@ async function handleNext() {
       <p style="color:#999;font-size:13px;line-height:1.7;margin:0 0 28px">
         {{ t(I.s1.desc) }}
       </p>
+    </div>
 
+    <!-- LEFT COLUMN: auth cards + footer -->
+    <div class="upload-left">
       <!-- Registration CTA Card (not logged in) -->
-      <div v-if="!authStore.isAuthenticated" style="background:linear-gradient(135deg,#f5f5f5,#ebebeb);border-radius:14px;padding:18px 20px">
+      <div v-if="!authStore.isAuthenticated" class="auth-card" style="background:linear-gradient(135deg,#f5f5f5,#ebebeb);border-radius:14px;padding:18px 20px">
         <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:10px;display:flex;align-items:center;gap:6px">
           <i class="fa-duotone fa-thin fa-gift" style="font-size:15px;color:#999"></i>
           {{ t(IL.bonusTitle) }}
@@ -235,7 +241,7 @@ async function handleNext() {
       </div>
 
       <!-- Logged-in user card -->
-      <div v-if="authStore.isAuthenticated" style="background:linear-gradient(135deg,#f5f5f5,#ebebeb);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:14px">
+      <div v-if="authStore.isAuthenticated" class="auth-card" style="background:linear-gradient(135deg,#f5f5f5,#ebebeb);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:14px">
         <img
           v-if="authStore.user?.avatarUrl"
           :src="authStore.user.avatarUrl"
@@ -273,19 +279,19 @@ async function handleNext() {
         </div>
       </div>
 
-      <p style="margin-top:20px;font-size:11px;color:#bbb">
-        {{ t(I.s1.local) }}
-      </p>
-      <p style="margin-top:6px;font-size:11px;color:#bbb">
-        <i class="fa-duotone fa-thin fa-envelope" style="margin-right:4px"></i>
-        <a href="mailto:service@img2ui.com" style="color:#bbb;text-decoration:none;border-bottom:1px dotted #ddd">service@img2ui.com</a>
-      </p>
-      <p style="margin-top:6px;font-size:11px;color:#bbb">
-        <i class="fa-brands fa-figma" style="margin-right:4px"></i>
-        <a href="https://www.figma.com/community/plugin/1616731798771519323" target="_blank" rel="noopener noreferrer" style="color:#bbb;text-decoration:none;border-bottom:1px dotted #ddd">
-          {{ t({ zh: 'Figma Plugin', en: 'Figma Plugin', ja: 'Figma Plugin' }) }}
-        </a>
-      </p>
+      <div class="left-footer">
+        <p style="margin-top:20px;font-size:11px;color:#bbb">{{ t(I.s1.local) }}</p>
+        <p style="margin-top:6px;font-size:11px;color:#bbb">
+          <i class="fa-duotone fa-thin fa-envelope" style="margin-right:4px"></i>
+          <a href="mailto:service@img2ui.com" style="color:#bbb;text-decoration:none;border-bottom:1px dotted #ddd">service@img2ui.com</a>
+        </p>
+        <p style="margin-top:6px;font-size:11px;color:#bbb">
+          <i class="fa-brands fa-figma" style="margin-right:4px"></i>
+          <a href="https://www.figma.com/community/plugin/1616731798771519323" target="_blank" rel="noopener noreferrer" style="color:#bbb;text-decoration:none;border-bottom:1px dotted #ddd">
+            {{ t({ zh: 'Figma Plugin', en: 'Figma Plugin', ja: 'Figma Plugin' }) }}
+          </a>
+        </p>
+      </div>
     </div>
 
     <!-- RIGHT COLUMN: Upload -->
@@ -379,6 +385,7 @@ async function handleNext() {
         ref="turnstileEl"
         style="margin-top:14px;display:flex;justify-content:center"
       ></div>
+
     </div>
   </div>
 </template>
@@ -387,18 +394,30 @@ async function handleNext() {
 .step-upload {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 48px;
+  grid-template-rows: auto auto;
+  gap: 24px 48px;
   max-width: 1100px;
   margin: 0 auto;
   align-items: start;
   padding-top: 12px;
 }
 
+/* Desktop: hero top-left, left col bottom-left, right col spans both rows */
+.upload-hero {
+  grid-column: 1;
+  grid-row: 1;
+  text-align: left;
+}
+
 .upload-left {
+  grid-column: 1;
+  grid-row: 2;
   text-align: left;
 }
 
 .upload-right {
+  grid-column: 2;
+  grid-row: 1 / 3;
   position: sticky;
   top: 24px;
 }
@@ -436,17 +455,34 @@ async function handleNext() {
 @media (max-width: 768px) {
   .step-upload {
     grid-template-columns: 1fr;
+    grid-template-rows: unset;
     gap: 24px;
     max-width: 520px;
   }
 
-  .upload-left {
-    order: 2;
+  .upload-hero {
+    grid-column: 1;
+    grid-row: unset;
+    order: 1;
+    text-align: center;
   }
 
   .upload-right {
-    order: 1;
+    grid-column: 1;
+    grid-row: unset;
+    order: 2;
     position: static;
+  }
+
+  .upload-left {
+    grid-column: 1;
+    grid-row: unset;
+    order: 3;
+    text-align: left;
+  }
+
+  .upload-left .left-footer {
+    text-align: center;
   }
 }
 </style>
