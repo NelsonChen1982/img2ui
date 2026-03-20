@@ -24,8 +24,11 @@
  *   GET  /health                — Health check
  */
 
-const DAILY_LIMIT = 30;
+const DAILY_LIMIT = 30; // legacy, kept for existing rate limit logic during migration
 const RATE_WINDOW = 86400;
+const CREDITS_CAP = 50;
+const WELCOME_BONUS = 10;
+const DAILY_REFILL = 3;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_BODY_SIZE = 7 * 1024 * 1024;  // 7 MB (base64 overhead)
 const ALLOWED_ORIGINS = [
@@ -134,11 +137,126 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function generateId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const hex = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function detectMediaType(base64) {
   if (base64.startsWith('/9j/')) return 'image/jpeg';
   if (base64.startsWith('iVBOR')) return 'image/png';
   if (base64.startsWith('UklGR')) return 'image/webp';
   return 'image/png';
+}
+
+// ─── Google ID Token Verification ───
+
+let _googleCertsCache = null;
+let _googleCertsExpiry = 0;
+
+async function getGoogleCerts() {
+  if (_googleCertsCache && Date.now() < _googleCertsExpiry) return _googleCertsCache;
+  const resp = await fetch('https://www.googleapis.com/oauth2/v3/certs');
+  const data = await resp.json();
+  _googleCertsCache = data.keys;
+  _googleCertsExpiry = Date.now() + 3600_000; // cache 1h
+  return _googleCertsCache;
+}
+
+function base64UrlDecode(str) {
+  const padded = str.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(padded);
+  return new Uint8Array([...binary].map(c => c.charCodeAt(0)));
+}
+
+async function verifyGoogleIdToken(idToken, clientId) {
+  const parts = idToken.split('.');
+  if (parts.length !== 3) throw new Error('Invalid token format');
+
+  const header = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[0])));
+  const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[1])));
+
+  // Check expiry and audience
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.exp < now) throw new Error('Token expired');
+  if (payload.aud !== clientId) throw new Error('Invalid audience');
+  if (!['accounts.google.com', 'https://accounts.google.com'].includes(payload.iss)) {
+    throw new Error('Invalid issuer');
+  }
+
+  // Verify signature with Google's public keys
+  const certs = await getGoogleCerts();
+  const cert = certs.find(k => k.kid === header.kid);
+  if (!cert) throw new Error('Unknown signing key');
+
+  const key = await crypto.subtle.importKey(
+    'jwk', cert, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']
+  );
+  const signed = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+  const signature = base64UrlDecode(parts[2]);
+  const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, signature, signed);
+  if (!valid) throw new Error('Invalid signature');
+
+  return payload; // { sub, email, name, picture, ... }
+}
+
+// ─── Auth Helpers ───
+
+async function upsertUser(db, email, name, avatarUrl) {
+  const emailNorm = normalizeEmail(email);
+  const existing = await db.prepare('SELECT id FROM users WHERE email = ?').bind(emailNorm).first();
+  if (existing) {
+    await db.prepare('UPDATE users SET last_login_at = datetime(\'now\'), name = ?, avatar_url = ? WHERE id = ?')
+      .bind(name || '', avatarUrl || '', existing.id).run();
+    return { id: existing.id, isNew: false };
+  }
+  const id = generateId();
+  await db.prepare('INSERT INTO users (id, email, name, avatar_url) VALUES (?, ?, ?, ?)')
+    .bind(id, emailNorm, name || '', avatarUrl || '').run();
+  return { id, isNew: true };
+}
+
+async function linkProvider(db, userId, provider, providerSub, rawJson) {
+  const existing = await db.prepare('SELECT id FROM auth_providers WHERE provider = ? AND provider_sub = ?')
+    .bind(provider, providerSub).first();
+  if (existing) return;
+  await db.prepare('INSERT INTO auth_providers (user_id, provider, provider_sub, raw_json) VALUES (?, ?, ?, ?)')
+    .bind(userId, provider, providerSub, JSON.stringify(rawJson || {})).run();
+}
+
+async function getCreditsBalance(db, userId) {
+  const row = await db.prepare('SELECT COALESCE(SUM(amount), 0) as balance FROM credits_ledger WHERE user_id = ?')
+    .bind(userId).first();
+  return row?.balance || 0;
+}
+
+async function getGenerationCount(db, userId) {
+  const row = await db.prepare('SELECT COUNT(*) as cnt FROM credits_ledger WHERE user_id = ? AND type = \'generation\'')
+    .bind(userId).first();
+  return row?.cnt || 0;
+}
+
+async function handleLoginCredits(db, userId, isNewUser) {
+  // Welcome bonus for new users
+  if (isNewUser) {
+    await db.prepare('INSERT INTO credits_ledger (user_id, amount, type, memo) VALUES (?, ?, ?, ?)')
+      .bind(userId, WELCOME_BONUS, 'welcome', 'Welcome bonus').run();
+  }
+
+  // Daily refill: check if already refilled today
+  const todayRefill = await db.prepare(
+    'SELECT COUNT(*) as cnt FROM credits_ledger WHERE user_id = ? AND type = \'daily_refill\' AND created_at >= date(\'now\')'
+  ).bind(userId).first();
+
+  if ((todayRefill?.cnt || 0) === 0) {
+    const balance = await getCreditsBalance(db, userId);
+    if (balance < CREDITS_CAP) {
+      const refillAmount = Math.min(DAILY_REFILL, CREDITS_CAP - balance);
+      await db.prepare('INSERT INTO credits_ledger (user_id, amount, type, memo) VALUES (?, ?, ?, ?)')
+        .bind(userId, refillAmount, 'daily_refill', 'Daily login refill').run();
+    }
+  }
 }
 
 // ─── CORS ───
@@ -147,6 +265,14 @@ function getCorsOrigin(request) {
   const origin = request.headers.get('Origin') || '';
   if (ALLOWED_ORIGINS.includes(origin)) return origin;
   return ALLOWED_ORIGINS[0]; // default to production
+}
+
+// Derive frontend origin from worker URL (for GitHub callback redirect)
+function getAppOrigin(url) {
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+    return 'http://localhost:5173';
+  }
+  return ALLOWED_ORIGINS[0]; // production
 }
 
 function corsHeaders(request) {
@@ -158,9 +284,10 @@ function corsHeaders(request) {
 
 // ─── Session Token (HMAC-SHA256) ───
 
-async function signSession(env, email, ip) {
+async function signSession(env, identity, ip) {
+  // identity: email (legacy), user_id (logged in), or "anon" (anonymous)
   const secret = env.TURNSTILE_SECRET_KEY || 'dev-fallback-key';
-  const payload = `${normalizeEmail(email)}:${ip}:${todayKey()}`;
+  const payload = `${identity}:${ip}:${todayKey()}`;
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
@@ -173,10 +300,19 @@ async function signSession(env, email, ip) {
   return token;
 }
 
-async function verifySession(env, token, email, ip) {
+async function verifySession(env, token, identity, ip) {
   if (!token) return false;
-  const expected = await signSession(env, email, ip);
+  const expected = await signSession(env, identity, ip);
   return token === expected;
+}
+
+// Try verifying session against multiple identities (user_id, email, anon)
+async function verifySessionFlex(env, token, ip, { userId, email } = {}) {
+  if (!token) return false;
+  if (userId && await verifySession(env, token, userId, ip)) return true;
+  if (email && await verifySession(env, token, normalizeEmail(email), ip)) return true;
+  if (await verifySession(env, token, 'anon', ip)) return true;
+  return false;
 }
 
 // ─── Turnstile Verification ───
@@ -455,16 +591,20 @@ async function logUsage(db, email, endpoint, provider, ip, imageKey, usage) {
   ).run();
 }
 
-async function saveDesignTokens(db, email, imageKey, tokensJson, annotationsJson, holisticJson, provider) {
+async function saveDesignTokens(db, email, imageKey, tokensJson, annotationsJson, holisticJson, provider, userId) {
+  const id = generateId();
   await db.prepare(
-    'INSERT INTO design_tokens (email, image_key, tokens_json, annotations_json, holistic_json, provider) VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT INTO design_tokens (id, user_id, email, image_key, tokens_json, annotations_json, holistic_json, provider) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
-    normalizeEmail(email), imageKey || '',
+    id,
+    userId || null,
+    normalizeEmail(email || ''), imageKey || '',
     typeof tokensJson === 'string' ? tokensJson : JSON.stringify(tokensJson),
     typeof annotationsJson === 'string' ? annotationsJson : JSON.stringify(annotationsJson),
     typeof holisticJson === 'string' ? holisticJson : JSON.stringify(holisticJson),
     provider || '',
   ).run();
+  return id;
 }
 
 // ─── Body Size Check ───
@@ -505,7 +645,216 @@ export default {
       return new Response(JSON.stringify({ status: 'ok' }), { headers });
     }
 
-    // Rate limit status
+    // ─── Google OAuth ───
+    if (url.pathname === '/api/auth/google' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
+      }
+
+      const { id_token: idToken } = body;
+      if (!idToken) {
+        return new Response(JSON.stringify({ error: 'missing_id_token' }), { status: 400, headers });
+      }
+      if (!env.GOOGLE_CLIENT_ID) {
+        return new Response(JSON.stringify({ error: 'google_not_configured' }), { status: 503, headers });
+      }
+      if (!env.DB) {
+        return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+      }
+
+      try {
+        const payload = await verifyGoogleIdToken(idToken, env.GOOGLE_CLIENT_ID);
+        const email = payload.email;
+        if (!email) throw new Error('No email in token');
+
+        const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+        const { id: userId, isNew } = await upsertUser(env.DB, email, payload.name, payload.picture);
+        await linkProvider(env.DB, userId, 'google', payload.sub, payload);
+        await handleLoginCredits(env.DB, userId, isNew);
+
+        const balance = await getCreditsBalance(env.DB, userId);
+        const genCount = await getGenerationCount(env.DB, userId);
+        const sessionToken = await signSession(env, userId, ip);
+
+        console.log(`[worker] Google auth: ${email} (${isNew ? 'new' : 'returning'}, balance=${balance})`);
+        return new Response(JSON.stringify({
+          sessionToken,
+          user: { id: userId, email: normalizeEmail(email), name: payload.name || '', avatarUrl: payload.picture || '' },
+          credits: { balance, canGenerate: genCount === 0 || balance > 0 },
+        }), { headers });
+      } catch (err) {
+        console.error('[worker] Google auth error:', err.message);
+        return new Response(JSON.stringify({ error: 'auth_failed', message: err.message }), { status: 401, headers });
+      }
+    }
+
+    // ─── GitHub OAuth: Redirect to GitHub ───
+    if (url.pathname === '/api/auth/github' && request.method === 'GET') {
+      if (!env.GITHUB_CLIENT_ID) {
+        return new Response(JSON.stringify({ error: 'github_not_configured' }), { status: 503, headers });
+      }
+      const redirectUri = `${url.origin}/api/auth/github/callback`;
+      const state = crypto.randomUUID();
+      // Store state in KV for CSRF verification (5 min TTL)
+      await env.RATE_LIMIT.put(`github_state:${state}`, '1', { expirationTtl: 300 });
+      const githubUrl = `https://github.com/login/oauth/authorize?client_id=${env.GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email&state=${state}`;
+      return Response.redirect(githubUrl, 302);
+    }
+
+    // ─── GitHub OAuth: Callback ───
+    if (url.pathname === '/api/auth/github/callback' && request.method === 'GET') {
+      const code = url.searchParams.get('code');
+      const state = url.searchParams.get('state');
+
+      if (!code || !state) {
+        return new Response(JSON.stringify({ error: 'missing_params' }), { status: 400, headers });
+      }
+      if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
+        return new Response(JSON.stringify({ error: 'github_not_configured' }), { status: 503, headers });
+      }
+      if (!env.DB) {
+        return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+      }
+
+      // Verify CSRF state
+      const stateValid = await env.RATE_LIMIT.get(`github_state:${state}`);
+      if (!stateValid) {
+        return new Response(JSON.stringify({ error: 'invalid_state' }), { status: 403, headers });
+      }
+      await env.RATE_LIMIT.delete(`github_state:${state}`);
+
+      try {
+        // Exchange code for access token
+        const tokenResp = await fetch('https://github.com/login/oauth/access_token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({
+            client_id: env.GITHUB_CLIENT_ID,
+            client_secret: env.GITHUB_CLIENT_SECRET,
+            code,
+          }),
+        });
+        const tokenData = await tokenResp.json();
+        if (!tokenData.access_token) throw new Error('Failed to get access token');
+
+        // Get user info
+        const userResp = await fetch('https://api.github.com/user', {
+          headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'User-Agent': 'img2ui' },
+        });
+        const userData = await userResp.json();
+
+        // Get email (may be private)
+        let email = userData.email;
+        if (!email) {
+          const emailResp = await fetch('https://api.github.com/user/emails', {
+            headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'User-Agent': 'img2ui' },
+          });
+          const emails = await emailResp.json();
+          const primary = emails.find(e => e.primary && e.verified);
+          email = primary?.email || emails.find(e => e.verified)?.email;
+        }
+        if (!email) throw new Error('No verified email from GitHub');
+
+        const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+        const { id: userId, isNew } = await upsertUser(env.DB, email, userData.name || userData.login, userData.avatar_url);
+        await linkProvider(env.DB, userId, 'github', String(userData.id), userData);
+        await handleLoginCredits(env.DB, userId, isNew);
+
+        const balance = await getCreditsBalance(env.DB, userId);
+        const genCount = await getGenerationCount(env.DB, userId);
+        const sessionToken = await signSession(env, userId, ip);
+
+        console.log(`[worker] GitHub auth: ${email} (${isNew ? 'new' : 'returning'}, balance=${balance})`);
+
+        // Redirect back to app — derive frontend origin from worker origin
+        const appOrigin = getAppOrigin(url);
+        const authData = encodeURIComponent(JSON.stringify({
+          sessionToken,
+          user: { id: userId, email: normalizeEmail(email), name: userData.name || userData.login || '', avatarUrl: userData.avatar_url || '' },
+          credits: { balance, canGenerate: genCount === 0 || balance > 0 },
+        }));
+        return Response.redirect(`${appOrigin}#auth=${authData}`, 302);
+      } catch (err) {
+        console.error('[worker] GitHub auth error:', err.message);
+        const appOrigin = getAppOrigin(url);
+        return Response.redirect(`${appOrigin}#auth_error=${encodeURIComponent(err.message)}`, 302);
+      }
+    }
+
+    // ─── Credits Balance ───
+    if (url.pathname === '/api/credits' && request.method === 'GET') {
+      const userId = url.searchParams.get('user_id');
+      const sessionToken = url.searchParams.get('session_token');
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'missing_user_id' }), { status: 400, headers });
+      }
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      if (!isDevBypass(request, env)) {
+        const valid = await verifySession(env, sessionToken, userId, ip);
+        if (!valid) {
+          return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+        }
+      }
+      if (!env.DB) {
+        return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+      }
+      const balance = await getCreditsBalance(env.DB, userId);
+      const genCount = await getGenerationCount(env.DB, userId);
+      return new Response(JSON.stringify({ balance, canGenerate: genCount === 0 || balance > 0 }), { headers });
+    }
+
+    // ─── Claim Anonymous Designs ───
+    if (url.pathname === '/api/claim-designs' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
+      }
+      const { user_id: userId, session_token: sessionToken, design_ids: designIds } = body;
+      if (!userId || !designIds || !Array.isArray(designIds) || designIds.length === 0) {
+        return new Response(JSON.stringify({ error: 'missing_params' }), { status: 400, headers });
+      }
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      if (!isDevBypass(request, env)) {
+        const valid = await verifySession(env, sessionToken, userId, ip);
+        if (!valid) {
+          return new Response(JSON.stringify({ error: 'invalid_session' }), { status: 401, headers });
+        }
+      }
+      if (!env.DB) {
+        return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
+      }
+      try {
+        let claimed = 0;
+        for (const designId of designIds.slice(0, 20)) { // max 20 at once
+          const result = await env.DB.prepare('UPDATE design_tokens SET user_id = ? WHERE id = ? AND user_id IS NULL')
+            .bind(userId, designId).run();
+          if (result.meta?.changes > 0) claimed++;
+        }
+        // Also update anon_usage records
+        await env.DB.prepare('UPDATE anon_usage SET claimed_by = ? WHERE design_id IN (SELECT id FROM design_tokens WHERE user_id = ?)')
+          .bind(userId, userId).run();
+        return new Response(JSON.stringify({ claimed }), { headers });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'claim_failed', message: err.message }), { status: 500, headers });
+      }
+    }
+
+    // ─── Anonymous Free Pass Check ───
+    if (url.pathname === '/api/anon-check' && request.method === 'GET') {
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const used = await env.RATE_LIMIT.get(`anon:ip:${ip}`);
+      return new Response(JSON.stringify({ used: !!used }), { headers });
+    }
+
+    // ─── Mark Anonymous Free Pass Used ───
+    if (url.pathname === '/api/anon-check' && request.method === 'POST') {
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      await env.RATE_LIMIT.put(`anon:ip:${ip}`, todayKey()); // no TTL = permanent
+      return new Response(JSON.stringify({ marked: true }), { headers });
+    }
+
+    // Rate limit status (legacy)
     if (url.pathname === '/api/rate-status') {
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
       const today = todayKey();
@@ -524,10 +873,8 @@ export default {
         return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
       }
 
-      const { image_base64: imageBase64, email, turnstile_token: turnstileToken } = body;
-      if (!email || !isValidEmail(email)) {
-        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers });
-      }
+      const { image_base64: imageBase64, email, turnstile_token: turnstileToken, user_id: userId } = body;
+      // Email is now optional (anonymous users won't have one)
       if (!imageBase64) {
         return new Response(JSON.stringify({ error: 'missing_image' }), { status: 400, headers });
       }
@@ -553,16 +900,19 @@ export default {
         }), { status: 413, headers });
       }
 
-      // Rate limit (5/day for uploads, skip for dev bypass)
-      let rateResult = { remaining: DAILY_LIMIT };
-      if (!devBypass) {
-        rateResult = await checkAndIncrementRate(env, ip, email, headers, DAILY_LIMIT, 'daily');
-        if (rateResult.error) return rateResult.response;
+      // Rate limiting: logged-in users use credits (checked client-side), anonymous uses IP check
+      if (!devBypass && !userId) {
+        // Anonymous: check if free pass already used
+        const anonUsed = await env.RATE_LIMIT.get(`anon:ip:${ip}`);
+        if (anonUsed) {
+          return new Response(JSON.stringify({ error: 'login_required', message: 'Free trial used. Please sign in.' }), { status: 403, headers });
+        }
       }
 
       const mediaType = detectMediaType(imageBase64);
       const ext = mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/webp' ? 'webp' : 'png';
-      const imageKey = `${normalizeEmail(email)}/${Date.now()}.${ext}`;
+      const folder = email ? normalizeEmail(email) : `anon/${ip.replace(/[:.]/g, '_')}`;
+      const imageKey = `${folder}/${Date.now()}.${ext}`;
 
       try {
         const binaryData = Uint8Array.from(atob(imageBase64), c => c.charCodeAt(0));
@@ -571,21 +921,21 @@ export default {
           customMetadata: { uploadedAt: new Date().toISOString() },
         });
 
-        if (env.DB) {
+        if (env.DB && email) {
           await upsertEmail(env.DB, email, ip);
           await logUsage(env.DB, email, 'upload-image', '', ip, imageKey, {});
         }
 
-        // Issue session token
-        const sessionToken = await signSession(env, email, ip);
+        // Issue session token: user_id for logged-in, "anon" for anonymous
+        const sessionIdentity = userId || (email ? normalizeEmail(email) : 'anon');
+        const sessionToken = await signSession(env, sessionIdentity, ip);
 
-        console.log(`[worker] R2 upload: ${imageKey} (${(estimatedBytes / 1024).toFixed(0)} KB)`);
+        console.log(`[worker] R2 upload: ${imageKey} (${(estimatedBytes / 1024).toFixed(0)} KB, ${userId ? 'user' : 'anon'})`);
         return new Response(JSON.stringify({
           imageKey,
           size: estimatedBytes,
           mediaType,
           sessionToken,
-          rateLimit: { remaining: rateResult.remaining, limit: DAILY_LIMIT },
         }), { headers });
       } catch (err) {
         console.error(`[worker] R2 upload error:`, err.message);
@@ -593,7 +943,7 @@ export default {
       }
     }
 
-    // ─── Save Design Result to D1 (session token required) ───
+    // ─── Save Design Result to D1 (supports anonymous + logged-in) ───
     if (url.pathname === '/api/save-result' && request.method === 'POST') {
       const sizeErr = checkBodySize(request, headers);
       if (sizeErr) return sizeErr;
@@ -603,16 +953,19 @@ export default {
         return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers });
       }
 
-      const { email, image_key: imageKey, tokens, annotations, holistic, provider, session_token: sessionToken } = body;
-      if (!email || !isValidEmail(email)) {
-        return new Response(JSON.stringify({ error: 'invalid_email' }), { status: 400, headers });
-      }
-
+      const { user_id: userId, email, image_key: imageKey, tokens, annotations, holistic, provider, session_token: sessionToken } = body;
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+      // Session verification: flexible — accept user_id, email, or anon session
       if (!isDevBypass(request, env)) {
-        const validSession = await verifySession(env, sessionToken, email, ip);
-        if (!validSession) {
-          return new Response(JSON.stringify({ error: 'invalid_session', message: 'Session expired or invalid' }), { status: 401, headers });
+        const valid = await verifySessionFlex(env, sessionToken, ip, { userId, email });
+        if (!valid) {
+          // For anonymous saves without session, allow if no existing anon usage
+          if (!userId && !email) {
+            // Anonymous save allowed without session
+          } else {
+            return new Response(JSON.stringify({ error: 'invalid_session', message: 'Session expired or invalid' }), { status: 401, headers });
+          }
         }
       }
 
@@ -623,20 +976,34 @@ export default {
         return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
       }
 
-      // Limit payload size for tokens/annotations
       const tokensStr = typeof tokens === 'string' ? tokens : JSON.stringify(tokens);
       if (tokensStr.length > 500000) {
         return new Response(JSON.stringify({ error: 'payload_too_large', message: 'Tokens JSON too large' }), { status: 413, headers });
       }
 
       try {
-        await upsertEmail(env.DB, email, ip);
-        await saveDesignTokens(env.DB, email, imageKey, tokens, annotations || [], holistic || {}, provider);
-        await logUsage(env.DB, email, 'save-result', provider || '', ip, imageKey || '', {});
-        return new Response(JSON.stringify({ saved: true }), { headers });
+        // Save design tokens (user_id can be null for anonymous)
+        const designId = await saveDesignTokens(env.DB, email || '', imageKey, tokens, annotations || [], holistic || {}, provider, userId);
+
+        // Credit deduction for logged-in users
+        if (userId) {
+          const genCount = await getGenerationCount(env.DB, userId);
+          // First generation is free (amount=0), subsequent cost 1
+          const amount = genCount === 0 ? 0 : -1;
+          await env.DB.prepare('INSERT INTO credits_ledger (user_id, amount, type, memo) VALUES (?, ?, ?, ?)')
+            .bind(userId, amount, 'generation', genCount === 0 ? 'First free generation' : 'UI Kit generation').run();
+          await upsertEmail(env.DB, email || '', ip);
+        } else {
+          // Anonymous: record in anon_usage
+          await env.DB.prepare('INSERT INTO anon_usage (ip, design_id) VALUES (?, ?)')
+            .bind(ip, designId).run();
+        }
+
+        await logUsage(env.DB, email || '', 'save-result', provider || '', ip, imageKey || '', {});
+        return new Response(JSON.stringify({ saved: true, design_id: designId }), { headers });
       } catch (err) {
         console.error(`[worker] D1 save error:`, err.message);
-        return new Response(JSON.stringify({ error: 'save_failed' }), { status: 500, headers });
+        return new Response(JSON.stringify({ error: 'save_failed', message: err.message }), { status: 500, headers });
       }
     }
 

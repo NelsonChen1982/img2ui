@@ -43,6 +43,7 @@ export const usePipelineStore = defineStore('pipeline', () => {
   const holisticResult = ref(null); // Holistic design analysis from AI
   const imageKey = ref(''); // R2 image key after upload
   const sessionToken = ref(''); // Session token from worker (issued on upload)
+  const currentDesignId = ref(''); // D1 design_tokens.id after save
   const uiKitName = ref('img2ui UI Kit'); // Editable UI Kit name for cover hero
   const showDevCompare = ref(false); // Dev-only: model comparison overlay
 
@@ -457,6 +458,7 @@ export const usePipelineStore = defineStore('pipeline', () => {
     holisticResult,
     imageKey,
     sessionToken,
+    currentDesignId,
     uiKitName,
     showDevCompare,
     uploadedImage,

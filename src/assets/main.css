@@ -81,15 +81,9 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
 .header-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  position: relative;
+  justify-content: space-between;
   padding: 0 24px;
   height: 50px;
-}
-
-.header-row > div:last-child {
-  position: absolute;
-  right: 20px;
 }
 
 .wiz-bar {
@@ -756,9 +750,6 @@ h1, h2, h3, .en-font, .brand-title, .feature-title, .cta-btn {
     gap: 6px;
   }
 
-  .header-row > div:last-child {
-    position: static;
-  }
 
   .wiz-bar {
     justify-content: center;

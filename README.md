@@ -108,11 +108,11 @@ Image Upload
 src/
 ├── components/
 │   ├── steps/     # 6-step wizard (Upload → Scan → Colors → Annotate → Processing → Result)
-│   └── ui/        # Shared UI (WizardBar, DropdownMenu, ActionFooter)
+│   └── ui/        # Shared UI (WizardBar, DropdownMenu, ActionFooter, AuthModal, UserMenu)
 ├── services/      # Business logic (AI, color extraction, DS builder, renderer, export)
-├── stores/        # Pinia stores (pipeline, settings, rateLimit)
+├── stores/        # Pinia stores (pipeline, settings, auth, rateLimit)
 └── data/          # Component types, metadata, skeletons, i18n, constants
-worker/            # Cloudflare Worker (rate limiting, R2 image storage, D1 usage log)
+worker/            # Cloudflare Worker (auth, credits, rate limiting, R2 image storage, D1)
 docs/              # Design documents
 ```
 
@@ -120,6 +120,7 @@ docs/              # Design documents
 
 | Version | Milestone |
 |---------|-----------|
+| **v0.2-beta** | Google + GitHub OAuth, credit-based usage system (welcome +10, daily login +3, cap 50), anonymous one-time free trial, two-column landing page redesign, user menu with credits display, remove re-annotate from Kit page, dark theme cover text fix |
 | **v0.1.1-beta** | Figma Plugin JSON export, skip-annotations shortcut from Step 3, footer layout redesign |
 | **v0.1-beta** | Code structure refactoring, dual theme (light/dark) palette generation |
 | **v0.0.4** | OpenRouter integration — Hunter Alpha, Grok 4.1 Fast, Qwen 3.5 series |
@@ -129,11 +130,11 @@ docs/              # Design documents
 
 ## Roadmap
 
-- [ ] **Community Gallery** — Browse and explore design systems created by other users
+- [ ] **Community Gallery** — Browse and explore design systems created by other users (auth system now in place)
 - [ ] **Smart Image Classification** — Auto-detect whether the upload is a UI screenshot or a photo, and conditionally offer the annotation workflow
-- [ ] **Eyedropper from Upload** — Pick colors directly from the uploaded image in the color/font tuning step
 - [ ] **Figma Native Clipboard** — Paste design tokens directly into Figma without a plugin (via fig-kiwi binary format)
 - [ ] **npm / npx Installable Package** — Package as an installable CLI skill so users can run `npx img2ui` to generate design systems directly from the terminal
+- [ ] **Credit Purchase** — Stripe integration for buying additional credits
 
 ## License
 

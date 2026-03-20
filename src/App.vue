@@ -3,9 +3,13 @@ import { computed, onMounted } from 'vue'
 import { usePipelineStore } from './stores/pipeline'
 import { useSettingsStore } from './stores/settings'
 import { useRateLimitStore } from './stores/rateLimit'
+import { useAuthStore } from './stores/auth'
 import WizardBar from './components/ui/WizardBar.vue'
 import ActionFooter from './components/ui/ActionFooter.vue'
 import DropdownMenu from './components/ui/DropdownMenu.vue'
+import AuthModal from './components/ui/AuthModal.vue'
+import LoginButton from './components/ui/LoginButton.vue'
+import UserMenu from './components/ui/UserMenu.vue'
 import logoImg from './assets/logo.jpg'
 import StepUpload from './components/steps/StepUpload.vue'
 import StepScan from './components/steps/StepScan.vue'
@@ -18,6 +22,7 @@ import DevModelCompare from './components/steps/DevModelCompare.vue'
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
 const rateLimitStore = useRateLimitStore()
+const authStore = useAuthStore()
 
 // Load Font Awesome Kit dynamically from env variable
 const faKitId = import.meta.env.VITE_FA_KIT_ID
@@ -26,6 +31,14 @@ if (faKitId && /^[a-f0-9]+$/.test(faKitId)) {
   s.src = `https://kit.fontawesome.com/${faKitId}.js`
   s.crossOrigin = 'anonymous'
   document.head.appendChild(s)
+}
+
+// Load Google GSI script for OAuth
+if (import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+  const gsi = document.createElement('script')
+  gsi.src = 'https://accounts.google.com/gsi/client'
+  gsi.async = true
+  document.head.appendChild(gsi)
 }
 
 const currentStep = computed(() => pipelineStore.step)
@@ -68,6 +81,7 @@ const modelLabel = computed(() => {
 onMounted(async () => {
   settingsStore.init()
   rateLimitStore.init()
+  authStore.init()
   settingsStore.detectLang()
 
   // ── Debug: check worker connection on startup (dev only) ──
@@ -107,6 +121,7 @@ function handleModelChange(value) {
   <header style="background:#fff;border-bottom:1px solid #e8e8e8;flex-shrink:0;">
     <!-- Row 1: logo + brand + dropdowns -->
     <div class="header-row">
+      <!-- Left: logo + brand (always visible) -->
       <div style="display:flex;align-items:center;gap:8px;">
         <img :src="logoImg" alt="img2ui" style="width:28px;height:28px;border-radius:7px;">
         <span class="brand-title" style="font-size:15px;font-weight:800;letter-spacing:.06em;color:#222;">img2ui</span>
@@ -149,15 +164,19 @@ function handleModelChange(value) {
           </template>
         </DropdownMenu>
 
-        <!-- GitHub -->
+        <!-- Auth: Login or User Menu -->
+        <UserMenu v-if="authStore.isAuthenticated" />
+        <LoginButton v-else />
+
+        <!-- GitHub (rightmost) -->
         <a href="https://github.com/NelsonChen1982/img2ui" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:#555;transition:color .15s;" title="GitHub">
           <i class="fa-brands fa-github" style="font-size:15px;"></i>
         </a>
       </div>
     </div>
 
-    <!-- Wizard bar -->
-    <WizardBar />
+    <!-- Wizard bar: only show from step 2+ -->
+    <WizardBar v-if="currentStep !== 1" />
   </header>
 
   <!-- Main content area -->
@@ -183,6 +202,9 @@ function handleModelChange(value) {
 
   <!-- Action footer -->
   <ActionFooter />
+
+  <!-- Auth Modal -->
+  <AuthModal />
 
   <!-- Dev-only: model comparison overlay -->
   <DevModelCompare v-if="isDev && pipelineStore.showDevCompare" @close="pipelineStore.showDevCompare = false" />

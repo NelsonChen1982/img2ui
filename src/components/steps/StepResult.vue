@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { usePipelineStore } from '../../stores/pipeline'
 import { useSettingsStore } from '../../stores/settings'
+import { useAuthStore } from '../../stores/auth'
 import { I } from '../../data/i18n'
 import { buildUIKitHTML } from '../../services/uiKitRenderer'
 import { getJSONOutput } from '../../services/downloadService'
@@ -10,6 +11,7 @@ import { isLight, ha, darken, safeTextColor } from '../../services/colorUtils'
 
 const pipelineStore = usePipelineStore()
 const settingsStore = useSettingsStore()
+const authStore = useAuthStore()
 
 const ds = computed(() => pipelineStore.activeDS)
 const coverBg = computed(() => {
@@ -23,6 +25,8 @@ const coverBg = computed(() => {
 const coverTextColor = computed(() => {
   const c = ds.value?.colors
   if (!c?.primary) return '#333'
+  // Dark theme always uses white text on dark gradient background
+  if (ds.value.isDark) return '#ffffff'
   return safeTextColor(c.primary, isLight(c.primary) ? c.text : '#ffffff')
 })
 const coverSubColor = computed(() => {
@@ -43,10 +47,78 @@ function saveTitle() {
 const copyLabel = ref('')
 const jsonExpanded = ref(false)
 const isMobile = ref(false)
-onMounted(() => {
+onMounted(async () => {
   isMobile.value = window.innerWidth <= 768
   window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 768 })
+
+  // ── Credit deduction + anonymous save on Kit page render ──
+  await handleGenerationCredit()
 })
+
+async function handleGenerationCredit() {
+  const apiBase = import.meta.env.VITE_API_BASE || settingsStore.devSettings?.base || ''
+
+  if (authStore.isAuthenticated) {
+    // Logged-in: deduct credit via save-result (which also saves design)
+    if (apiBase) {
+      try {
+        const hdrs = { 'Content-Type': 'application/json' }
+        if (import.meta.env.DEV && import.meta.env.VITE_DEV_BYPASS_KEY) hdrs['x-dev-key'] = import.meta.env.VITE_DEV_BYPASS_KEY
+        const resp = await fetch(`${apiBase}/api/save-result`, {
+          method: 'POST',
+          headers: hdrs,
+          body: JSON.stringify({
+            user_id: authStore.user.id,
+            email: authStore.user.email,
+            session_token: authStore.sessionToken,
+            image_key: pipelineStore.imageKey || '',
+            tokens: pipelineStore.activeDS,
+            annotations: pipelineStore.annotations,
+            holistic: pipelineStore.holisticResult || {},
+            provider: settingsStore.selectedProvider,
+          }),
+        })
+        const data = await resp.json()
+        if (data.design_id) {
+          pipelineStore.currentDesignId = data.design_id
+        }
+      } catch (err) {
+        if (import.meta.env.DEV) console.warn('[img2ui] save-result failed:', err.message)
+      }
+    }
+    // Refresh credits after deduction
+    await authStore.refreshCredits()
+  } else {
+    // Anonymous: mark free pass used + save anonymously
+    await authStore.markFreePassUsed()
+    if (apiBase) {
+      try {
+        const hdrs = { 'Content-Type': 'application/json' }
+        if (import.meta.env.DEV && import.meta.env.VITE_DEV_BYPASS_KEY) hdrs['x-dev-key'] = import.meta.env.VITE_DEV_BYPASS_KEY
+        const resp = await fetch(`${apiBase}/api/save-result`, {
+          method: 'POST',
+          headers: hdrs,
+          body: JSON.stringify({
+            user_id: null,
+            email: '',
+            image_key: pipelineStore.imageKey || '',
+            tokens: pipelineStore.activeDS,
+            annotations: pipelineStore.annotations,
+            holistic: pipelineStore.holisticResult || {},
+            provider: settingsStore.selectedProvider,
+          }),
+        })
+        const data = await resp.json()
+        if (data.design_id) {
+          pipelineStore.currentDesignId = data.design_id
+          authStore.storeAnonDesignId(data.design_id)
+        }
+      } catch (err) {
+        if (import.meta.env.DEV) console.warn('[img2ui] anon save-result failed:', err.message)
+      }
+    }
+  }
+}
 
 function t(obj) {
   if (!obj) return ''

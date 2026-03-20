@@ -16,8 +16,10 @@ dist-ssr
 .env
 .env.*
 
-# Cloudflare Worker (contains KV namespace IDs)
+# Cloudflare Worker
 worker/wrangler.toml
+worker/.dev.vars
+worker/.wrangler/
 
 # Editor directories and files
 .vscode/*

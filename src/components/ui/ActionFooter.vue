@@ -92,10 +92,6 @@ function handleEditColors() {
   pipelineStore.editFromResult('colors')
 }
 
-function handleEditAnnotations() {
-  pipelineStore.editFromResult('annotations')
-}
-
 function handleRestart() {
   pipelineStore.restartPipeline()
 }
@@ -239,7 +235,6 @@ function closeExportOnBackdrop(e) {
 
       <div class="af-right">
         <button class="af-btn-secondary" @click="handleEditColors"><i class="fa-duotone fa-thin fa-palette" style="margin-right:4px;"></i>{{ t(I.s7.editColors) }}</button>
-        <button class="af-btn-secondary" @click="handleEditAnnotations"><i class="fa-duotone fa-thin fa-puzzle-piece" style="margin-right:4px;"></i>{{ t(I.s7.editAnnotations) }}</button>
         <button class="af-btn-secondary" style="opacity:.6;" @click="handleRestart"><i class="fa-duotone fa-thin fa-rotate-right" style="margin-right:4px;"></i>{{ t(I.s7.restart) }}</button>
         <button class="af-btn af-btn-secondary" @click="toggleExport" style="font-weight:600;">
           <i class="fa-duotone fa-thin fa-file-export" style="margin-right:5px;"></i>

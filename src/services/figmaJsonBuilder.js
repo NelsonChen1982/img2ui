@@ -537,13 +537,36 @@ export function buildFigmaJSON(DS) {
 
   const rootBg = DS.isDark ? '#111111' : '#F5F5F5'
 
+  // ── Build tokens block so the Figma plugin can create Color/Text Styles ──
+  const headingFont = DS.typography?.headingFont || DS.fonts?.heading || 'Inter'
+  const bodyFont = DS.typography?.bodyFont || DS.fonts?.body || 'Inter'
+  const typoScale = DS.typography?.scale || [32, 24, 20, 16, 14, 12]
+  const typoWeights = [800, 700, 600, 600, 400, 400, 500]
+  const typoNames = ['Display', 'H1', 'H2', 'H3', 'Body', 'Small', 'Caption']
+  const typoLH = [1.15, 1.25, 1.35, 1.4, 1.65, 1.55, 1.4]
+
+  const tokens = {
+    colors: { ...DS.colors },
+    fonts: {
+      heading: headingFont,
+      body: bodyFont,
+    },
+    typography: typoNames.map((name, i) => ({
+      name,
+      size: typoScale[i] || 14,
+      weight: typoWeights[i] || 400,
+      lineHeight: typoLH[i] || 1.5,
+    })),
+  }
+
   return {
     source: 'img2ui',
     version: '1.0',
+    tokens,
     nodes: [
       frame('img2ui UI Kit', { mode: 'VERTICAL', gap: 16, padding: [32, 32, 32, 32] }, [
-        text('img2ui — UI Kit', { weight: 800, size: 22, color: DS.isDark ? '#eeeeee' : '#222222', family: DS.typography?.headingFont || 'Inter' }),
-        text(`${DS.typography?.headingFont || 'Inter'} / ${DS.typography?.bodyFont || 'Inter'} • ${DS.isDark ? 'Dark' : 'Light'} Theme`, {
+        text('img2ui — UI Kit', { weight: 800, size: 22, color: DS.isDark ? '#eeeeee' : '#222222', family: headingFont }),
+        text(`${headingFont} / ${bodyFont} • ${DS.isDark ? 'Dark' : 'Light'} Theme`, {
           size: 12, color: DS.isDark ? '#666666' : '#999999',
         }),
         ...fullWidthSections,

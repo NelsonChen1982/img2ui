@@ -8,7 +8,7 @@
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { DAILY_LIMIT } from '../data/constants.js';
+const DAILY_LIMIT = 30; // legacy constant, kept for backward compat
 
 export const useRateLimitStore = defineStore('rateLimit', () => {
   // State

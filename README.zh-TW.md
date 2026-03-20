@@ -107,11 +107,11 @@ npm run build
 src/
 ├── components/
 │   ├── steps/     # 六步驟精靈（上傳 → 辨識 → 配色 → 標注 → 產出中 → 結果）
-│   └── ui/        # 共用 UI（WizardBar、DropdownMenu、ActionFooter）
+│   └── ui/        # 共用 UI（WizardBar、DropdownMenu、ActionFooter、AuthModal、UserMenu）
 ├── services/      # 業務邏輯（AI、色彩萃取、DS 建構、渲染器、匯出）
-├── stores/        # Pinia stores（pipeline、settings、rateLimit）
+├── stores/        # Pinia stores（pipeline、settings、auth、rateLimit）
 └── data/          # 元件類型、metadata、骨架、i18n、常數
-worker/            # Cloudflare Worker（頻率限制、R2 圖片儲存、D1 使用紀錄）
+worker/            # Cloudflare Worker（認證、點數、頻率限制、R2 圖片儲存、D1）
 docs/              # 設計文件
 ```
 
@@ -119,6 +119,7 @@ docs/              # 設計文件
 
 | 版本 | 里程碑 |
 |------|--------|
+| **v0.2-beta** | Google + GitHub OAuth 登入、點數制（註冊送 10 點、每日登入 +3、上限 50）、匿名首次免費體驗、首頁雙欄版面重設計、會員選單含點數顯示、移除 Kit 頁重新標註、Dark theme 封面文字修正 |
 | **v0.1.1-beta** | Figma Plugin JSON 匯出、第三步驟略過標註捷徑、底部列版面重新設計 |
 | **v0.1-beta** | 程式碼結構重構、雙主題（淺色/深色）色盤生成 |
 | **v0.0.4** | OpenRouter 整合 — Hunter Alpha、Grok 4.1 Fast、Qwen 3.5 系列 |
@@ -128,11 +129,11 @@ docs/              # 設計文件
 
 ## 開發路線
 
-- [ ] **社群 Gallery** — 瀏覽其他使用者建立的 Design System 作品
+- [ ] **社群 Gallery** — 瀏覽其他使用者建立的 Design System 作品（認證系統已就位）
 - [ ] **智慧圖片分類** — 自動判斷上傳圖片為 UI 截圖或照片，依結果決定是否提供標注流程
-- [ ] **上傳圖片吸色** — 在配色與字體步驟中，直接從上傳的圖片挑選顏色
 - [ ] **Figma 原生剪貼簿** — 無需 Plugin，直接將 design token 貼上到 Figma（透過 fig-kiwi 二進位格式）
 - [ ] **npm / npx 安裝套件** — 封裝為可安裝的 CLI skill 套件，讓使用者可透過 `npx img2ui` 直接在終端產生 Design System
+- [ ] **點數購買** — 串接 Stripe 購買額外點數
 
 ## 授權
 
