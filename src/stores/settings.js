@@ -37,7 +37,7 @@ function setCookie(name, value, days) {
 export const useSettingsStore = defineStore('settings', () => {
   // State
   const lang = ref('zh');
-  const selectedProvider = ref('gpt4o');
+  const selectedProvider = ref('gpt4o-mini');
   const selectedCSSFramework = ref('tailwind');
   const email = ref('');
   const rateLimitRemaining = ref(0); // deprecated — kept for backward compat during migration

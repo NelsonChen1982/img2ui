@@ -58,18 +58,12 @@ const languages = [
   { value: 'ja', label: '日本語' }
 ]
 
-// AI Model options
+// AI Model options (public-facing selection)
 const models = [
   { value: 'gpt4o-mini', label: 'GPT-4o Mini' },
   { value: 'gpt4o', label: 'GPT-4o' },
-  { value: 'gpt-5.4', label: 'GPT-5.4' },
-  { value: 'claude-sonnet', label: 'Claude Sonnet 4' },
-  { value: 'gpt5-nano', label: 'GPT-5 Nano' },
-  { value: 'qwen3.5-35b', label: 'Qwen 3.5 35B' },
   { value: 'qwen3.5-9b', label: 'Qwen 3.5 9B' },
-  { value: 'qwen3.5-flash', label: 'Qwen 3.5 Flash' },
   { value: 'grok-4.1-fast', label: 'Grok 4.1 Fast' },
-  { value: 'hunter-alpha', label: 'Hunter Alpha (Free)' },
 ]
 
 const modelLabel = computed(() => {
@@ -140,9 +134,8 @@ function handleModelChange(value) {
           </template>
         </DropdownMenu>
 
-        <!-- Model dropdown (dev only) -->
+        <!-- Model dropdown -->
         <DropdownMenu
-          v-if="isDev"
           :items="models"
           :model-value="settingsStore.selectedProvider"
           @update:model-value="handleModelChange"

@@ -34,6 +34,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Computed
   const isAuthenticated = computed(() => !!user.value);
+  const today = new Date().toISOString().slice(0, 10);
+  const hasCheckedInToday = ref(localStorage.getItem('pic2ui_checkin') === today);
 
   /**
    * Check if anonymous user has used their free pass today
@@ -168,6 +170,10 @@ export const useAuthStore = defineStore('auth', () => {
     sessionToken.value = data.sessionToken;
     creditsBalance.value = data.credits?.balance || 0;
     canGenerate.value = data.credits?.canGenerate ?? true;
+    // Mark today's check-in
+    const todayStr = new Date().toISOString().slice(0, 10);
+    localStorage.setItem('pic2ui_checkin', todayStr);
+    hasCheckedInToday.value = true;
     // Persist to localStorage
     localStorage.setItem('pic2ui_auth', JSON.stringify({
       user: data.user,
@@ -200,6 +206,11 @@ export const useAuthStore = defineStore('auth', () => {
       if (resp.ok) {
         creditsBalance.value = data.balance;
         canGenerate.value = data.canGenerate;
+        if (data.checkedIn) {
+          const todayStr = new Date().toISOString().slice(0, 10);
+          localStorage.setItem('pic2ui_checkin', todayStr);
+          hasCheckedInToday.value = true;
+        }
       }
     } catch { /* silent */ }
   }
@@ -281,6 +292,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     // Computed
     isAuthenticated,
+    hasCheckedInToday,
 
     // Actions
     hasUsedFreePass,

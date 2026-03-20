@@ -107,7 +107,7 @@ const exportFormats = [
   { id: 'skill-zip', icon: 'fa-folder-open', nameKey: 'fmtZipName', descKey: 'fmtZipDesc' },
   { id: 'html', icon: 'fa-browser', nameKey: 'fmtHtmlName', descKey: 'fmtHtmlDesc' },
   { id: 'design-md', icon: 'fa-palette', nameKey: 'fmtDesignMdName', descKey: 'fmtDesignMdDesc', badge: 'fmtDesignMdBadge' },
-  { id: 'figma-json', icon: 'fa-figma', iconPrefix: 'fa-brands', nameKey: 'fmtFigmaName', descKey: 'fmtFigmaDesc', badge: 'fmtFigmaBadge', comingSoon: true },
+  { id: 'figma-json', icon: 'fa-figma', iconPrefix: 'fa-brands', nameKey: 'fmtFigmaName', descKey: 'fmtFigmaDesc', badge: 'fmtFigmaBadge' },
 ]
 
 function toggleExport() {
@@ -295,15 +295,29 @@ function closeExportOnBackdrop(e) {
               </div>
             </div>
 
-            <div v-if="exportFormat === 'figma-json'" style="display:flex;gap:8px;">
-              <button class="export-dl-btn" style="flex:1;" @click="doFigmaCopy">
-                <i :class="figmaCopied ? 'fa-duotone fa-thin fa-check' : 'fa-duotone fa-thin fa-copy'" style="margin-right:6px;"></i>
-                {{ figmaCopied ? 'Copied!' : 'Copy' }}
-              </button>
-              <button class="export-dl-btn" style="flex:1;" @click="doExport">
-                <i class="fa-duotone fa-thin fa-download" style="margin-right:6px;"></i>
-                Download
-              </button>
+            <div v-if="exportFormat === 'figma-json'">
+              <div style="display:flex;gap:8px;margin-bottom:10px;">
+                <button class="export-dl-btn" style="flex:1;" @click="doFigmaCopy">
+                  <i :class="figmaCopied ? 'fa-duotone fa-thin fa-check' : 'fa-duotone fa-thin fa-copy'" style="margin-right:6px;"></i>
+                  {{ figmaCopied ? 'Copied!' : 'Copy' }}
+                </button>
+                <button class="export-dl-btn" style="flex:1;" @click="doExport">
+                  <i class="fa-duotone fa-thin fa-download" style="margin-right:6px;"></i>
+                  Download
+                </button>
+              </div>
+              <a
+                href="https://www.figma.com/community/plugin/1616731798771519323"
+                target="_blank"
+                rel="noopener noreferrer"
+                style="display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 14px;border-radius:8px;background:#1e1e1e;color:#fff;font-size:12px;font-weight:600;text-decoration:none;transition:opacity 0.2s;"
+                onmouseover="this.style.opacity='0.85'"
+                onmouseout="this.style.opacity='1'"
+              >
+                <i class="fa-brands fa-figma" style="font-size:14px;"></i>
+                {{ t({ zh: '安裝 Figma Plugin 以直接匯入', en: 'Install Figma Plugin to import directly', ja: 'Figma Pluginをインストールして直接インポート' }) }}
+                <i class="fa-duotone fa-thin fa-arrow-up-right-from-square" style="font-size:10px;opacity:0.6;"></i>
+              </a>
             </div>
             <button v-else class="export-dl-btn" @click="doExport">
               <i class="fa-duotone fa-thin fa-download" style="margin-right:6px;"></i>

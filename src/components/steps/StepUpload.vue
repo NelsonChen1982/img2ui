@@ -49,9 +49,7 @@ const IL = {
 
 const features = computed(() => {
   const lang = settingsStore.lang
-  const figmaLabel = isDev
-    ? { zh: '匯出 Figma', en: 'Export Figma', ja: 'Figma出力' }[lang]
-    : { zh: '匯出 Figma（即將上線）', en: 'Export Figma (coming soon)', ja: 'Figma出力（近日公開）' }[lang]
+  const figmaLabel = { zh: '匯出 Figma JSON', en: 'Export Figma JSON', ja: 'Figma JSON出力' }[lang]
   return [
     { icon: 'fa-palette', label: { zh: '智能色彩萃取', en: 'Smart Color Extraction', ja: 'スマート配色抽出' }, desc: { zh: 'K-means 量化分析主色', en: 'K-means quantization analysis', ja: 'K-meansによる主色分析' } },
     { icon: 'fa-ruler-combined', label: { zh: '自動排版系統', en: 'Auto Typography System', ja: '自動タイポグラフィ' }, desc: { zh: '字級、間距、圓角 tokens', en: 'Font size, spacing, radius tokens', ja: '文字サイズ・間隔・角丸トークン' } },
@@ -261,6 +259,17 @@ async function handleNext() {
             <i class="fa-duotone fa-thin fa-coins" style="font-size:11px"></i>
             {{ creditsNotice }}
           </div>
+          <div style="margin-top:6px;display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;font-size:10px;font-weight:600"
+            :style="authStore.hasCheckedInToday
+              ? { background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }
+              : { background: '#fafafa', color: '#bbb', border: '1px solid #e8e8e8' }"
+          >
+            <i :class="authStore.hasCheckedInToday ? 'fa-duotone fa-thin fa-circle-check' : 'fa-duotone fa-thin fa-circle'" style="font-size:10px"></i>
+            {{ authStore.hasCheckedInToday
+              ? t({ zh: '本日簽到已領取', en: 'Daily bonus claimed', ja: '本日のログインボーナス受取済' })
+              : t({ zh: '今日尚未簽到', en: 'Login to claim daily bonus', ja: '本日未ログイン' })
+            }}
+          </div>
         </div>
       </div>
 
@@ -270,6 +279,12 @@ async function handleNext() {
       <p style="margin-top:6px;font-size:11px;color:#bbb">
         <i class="fa-duotone fa-thin fa-envelope" style="margin-right:4px"></i>
         <a href="mailto:service@img2ui.com" style="color:#bbb;text-decoration:none;border-bottom:1px dotted #ddd">service@img2ui.com</a>
+      </p>
+      <p style="margin-top:6px;font-size:11px;color:#bbb">
+        <i class="fa-brands fa-figma" style="margin-right:4px"></i>
+        <a href="https://www.figma.com/community/plugin/1616731798771519323" target="_blank" rel="noopener noreferrer" style="color:#bbb;text-decoration:none;border-bottom:1px dotted #ddd">
+          {{ t({ zh: 'Figma Plugin', en: 'Figma Plugin', ja: 'Figma Plugin' }) }}
+        </a>
       </p>
     </div>
 

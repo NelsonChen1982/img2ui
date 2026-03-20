@@ -173,16 +173,24 @@ async function openHistory() {
               :key="item.id"
               style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f5f5f5"
             >
-              <div>
+              <div style="min-width:0;flex:1;margin-right:12px">
                 <div style="font-size:12px;font-weight:500;color:#444">
                   {{ t(typeLabels[item.type] || { en: item.type }) }}
                 </div>
                 <div style="font-size:10px;color:#bbb;margin-top:2px">
                   {{ formatTime(item.created_at) }}
                 </div>
+                <!-- Design ID from memo (format: "label:designId") -->
+                <div
+                  v-if="item.type === 'generation' && item.memo?.includes(':')"
+                  style="font-size:9px;color:#ccc;margin-top:3px;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                  :title="item.memo.split(':').slice(1).join(':')"
+                >
+                  # {{ item.memo.split(':').slice(1).join(':') }}
+                </div>
               </div>
               <div
-                style="font-size:14px;font-weight:700;font-variant-numeric:tabular-nums"
+                style="font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0"
                 :style="{ color: item.amount >= 0 ? '#22c55e' : '#ef4444' }"
               >
                 {{ item.amount >= 0 ? '+' : '' }}{{ item.amount }}

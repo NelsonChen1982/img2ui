@@ -111,13 +111,26 @@ const PROVIDERS = {
   },
 };
 
+function hasProviderKey(env, providerKey) {
+  const p = PROVIDERS[providerKey];
+  if (!p) return false;
+  if (p.type === 'anthropic') return !!env.ANTHROPIC_API_KEY;
+  if (p.type === 'openai') return !!env.OPENAI_API_KEY;
+  if (p.type === 'gemini') return !!env.GEMINI_API_KEY;
+  if (p.type === 'openrouter') return !!env.OPENROUTER_API_KEY;
+  return false;
+}
+
 function resolveProvider(requested, env) {
-  if (requested && requested !== 'auto' && PROVIDERS[requested]) {
+  if (requested && requested !== 'auto' && PROVIDERS[requested] && hasProviderKey(env, requested)) {
     return requested;
   }
+  // Fallback chain: use whatever key is available
   if (env.OPENAI_API_KEY) return 'gpt4o';
+  if (env.ANTHROPIC_API_KEY) return 'claude-haiku';
   if (env.GEMINI_API_KEY) return 'gemini-flash';
-  return 'claude-haiku';
+  if (env.OPENROUTER_API_KEY) return 'qwen3.5-flash';
+  return 'claude-haiku'; // last resort, will fail if no key
 }
 
 function isValidEmail(str) {
@@ -800,9 +813,10 @@ export default {
       if (!env.DB) {
         return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
       }
+      await handleLoginCredits(env.DB, userId, false); // trigger daily refill if not yet done today
       const balance = await getCreditsBalance(env.DB, userId);
       const genCount = await getGenerationCount(env.DB, userId);
-      return new Response(JSON.stringify({ balance, canGenerate: genCount === 0 || balance > 0 }), { headers });
+      return new Response(JSON.stringify({ balance, canGenerate: genCount === 0 || balance > 0, checkedIn: true }), { headers });
     }
 
     // ─── Credits History ───
@@ -1021,7 +1035,7 @@ export default {
           // First generation is free (amount=0), subsequent cost 1
           const amount = genCount === 0 ? 0 : -1;
           await env.DB.prepare('INSERT INTO credits_ledger (user_id, amount, type, memo) VALUES (?, ?, ?, ?)')
-            .bind(userId, amount, 'generation', genCount === 0 ? 'First free generation' : 'UI Kit generation').run();
+            .bind(userId, amount, 'generation', `${genCount === 0 ? 'First free generation' : 'UI Kit generation'}:${designId}`).run();
           await upsertEmail(env.DB, email || '', ip);
         } else {
           // Anonymous: record in anon_usage
