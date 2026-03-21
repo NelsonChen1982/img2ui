@@ -107,7 +107,7 @@ const exportFormats = [
   { id: 'skill-zip', icon: 'fa-folder-open', nameKey: 'fmtZipName', descKey: 'fmtZipDesc' },
   { id: 'html', icon: 'fa-browser', nameKey: 'fmtHtmlName', descKey: 'fmtHtmlDesc' },
   { id: 'design-md', icon: 'fa-palette', nameKey: 'fmtDesignMdName', descKey: 'fmtDesignMdDesc', badge: 'fmtDesignMdBadge' },
-  { id: 'figma-json', icon: 'fa-figma', iconPrefix: 'fa-brands', nameKey: 'fmtFigmaName', descKey: 'fmtFigmaDesc', badge: 'fmtFigmaBadge' },
+  { id: 'figma-json', icon: 'fa-figma', iconPrefix: 'fa-brands', nameKey: 'fmtFigmaName', descKey: 'fmtFigmaDesc', badge: settingsStore.features.figma ? 'fmtFigmaBadge' : 'fmtFigmaComingSoon', comingSoon: !settingsStore.features.figma },
 ]
 
 function toggleExport() {

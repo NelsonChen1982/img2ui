@@ -116,6 +116,7 @@ export const I = {
     fmtFigmaName: { zh:'Figma JSON', en:'Figma JSON', ja:'Figma JSON' },
     fmtFigmaDesc: { zh:'Figma Plugin 可匯入的 UI Kit', en:'UI Kit for Figma Plugin import', ja:'Figma Plugin用UIキット' },
     fmtFigmaBadge: { zh:'NEW', en:'NEW', ja:'NEW' },
+    fmtFigmaComingSoon: { zh:'Coming Soon', en:'Coming Soon', ja:'Coming Soon' },
   },
   slotLabels: {
     primary:  { zh:'主色',   en:'Primary',   ja:'メイン' },

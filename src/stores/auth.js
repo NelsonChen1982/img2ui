@@ -34,8 +34,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Computed
   const isAuthenticated = computed(() => !!user.value);
-  const today = new Date().toISOString().slice(0, 10);
-  const hasCheckedInToday = ref(localStorage.getItem('pic2ui_checkin') === today);
+  const hasCheckedInToday = ref(localStorage.getItem('pic2ui_checkin') === new Date().toISOString().slice(0, 10));
+  const lastRefillAmount = ref(0); // set when daily refill is granted, watched by App.vue for popup
 
   /**
    * Check if anonymous user has used their free pass today
@@ -211,8 +211,28 @@ export const useAuthStore = defineStore('auth', () => {
           localStorage.setItem('pic2ui_checkin', todayStr);
           hasCheckedInToday.value = true;
         }
+        // Notify UI if daily refill was just granted
+        if (data.refillAmount > 0) {
+          lastRefillAmount.value = data.refillAmount;
+        }
       }
     } catch { /* silent */ }
+  }
+
+  /**
+   * Check daily credits on tab visibility change (handles date rollover)
+   */
+  function startDailyCheck() {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!isAuthenticated.value) return;
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const lastCheckin = localStorage.getItem('pic2ui_checkin');
+      if (lastCheckin !== todayStr) {
+        hasCheckedInToday.value = false;
+        refreshCredits();
+      }
+    });
   }
 
   /**
@@ -265,11 +285,14 @@ export const useAuthStore = defineStore('auth', () => {
         if (data.user && data.sessionToken) {
           user.value = data.user;
           sessionToken.value = data.sessionToken;
-          // Refresh credits in background
+          // Refresh credits in background (triggers daily refill if new day)
           refreshCredits();
         }
       }
     } catch { /* silent */ }
+
+    // Watch for tab focus to handle date rollover
+    startDailyCheck();
   }
 
   /**
@@ -293,6 +316,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Computed
     isAuthenticated,
     hasCheckedInToday,
+    lastRefillAmount,
 
     // Actions
     hasUsedFreePass,

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePipelineStore } from './stores/pipeline'
 import { useSettingsStore } from './stores/settings'
@@ -43,6 +43,18 @@ function showToast(msg) {
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => { toast.value = null }, 2500)
 }
+
+// Daily credit popup
+const dailyCreditPopup = ref(false)
+const dailyCreditAmount = ref(0)
+
+watch(() => authStore.lastRefillAmount, (amount) => {
+  if (amount > 0) {
+    dailyCreditAmount.value = amount
+    dailyCreditPopup.value = true
+    authStore.lastRefillAmount = 0 // reset
+  }
+})
 
 const historyOpen = ref(false)
 const historyLoading = ref(false)
@@ -334,6 +346,33 @@ function handleModelChange(value) {
     </Transition>
   </Teleport>
 
+  <!-- Daily Credit Popup -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="dailyCreditPopup" class="daily-credit-overlay" @click.self="dailyCreditPopup = false">
+        <div class="daily-credit-dialog">
+          <div class="daily-credit-icon">
+            <i class="fa-duotone fa-thin fa-coins" style="font-size:32px;color:#f59e0b;"></i>
+          </div>
+          <div class="daily-credit-amount">+{{ dailyCreditAmount }}</div>
+          <div class="daily-credit-title">
+            {{ settingsStore.lang === 'zh' ? '每日登入獎勵' : settingsStore.lang === 'ja' ? '毎日ログインボーナス' : 'Daily Login Bonus' }}
+          </div>
+          <div class="daily-credit-desc">
+            {{ settingsStore.lang === 'zh'
+              ? `已獲得 ${dailyCreditAmount} 點，目前共 ${authStore.creditsBalance} 點`
+              : settingsStore.lang === 'ja'
+              ? `${dailyCreditAmount} クレジット獲得、合計 ${authStore.creditsBalance} クレジット`
+              : `You received ${dailyCreditAmount} credits. Balance: ${authStore.creditsBalance}` }}
+          </div>
+          <button class="daily-credit-btn" @click="dailyCreditPopup = false">
+            {{ settingsStore.lang === 'zh' ? '太好了' : settingsStore.lang === 'ja' ? 'やった' : 'Awesome' }}
+          </button>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
   <!-- Credits History Modal (mobile) -->
   <Teleport to="body">
     <div v-if="historyOpen" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4);backdrop-filter:blur(3px)" @click.self="historyOpen = false">
@@ -374,3 +413,46 @@ function handleModelChange(value) {
   <!-- Auth Modal -->
   <AuthModal />
 </template>
+
+<style scoped>
+.daily-credit-overlay {
+  position: fixed; inset: 0; z-index: 99998;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.35); backdrop-filter: blur(3px);
+}
+.daily-credit-dialog {
+  background: #fff; border-radius: 20px; padding: 32px 28px 24px;
+  max-width: 300px; width: 85%; text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.15);
+}
+.daily-credit-icon {
+  margin-bottom: 8px;
+}
+.daily-credit-amount {
+  font-size: 36px; font-weight: 800; color: #f59e0b;
+  font-variant-numeric: tabular-nums; margin-bottom: 4px;
+}
+.daily-credit-title {
+  font-size: 15px; font-weight: 700; color: #222; margin-bottom: 6px;
+}
+.daily-credit-desc {
+  font-size: 12px; color: #888; line-height: 1.5; margin-bottom: 20px;
+}
+.daily-credit-btn {
+  width: 100%; padding: 11px 0; border: none; border-radius: 12px;
+  background: linear-gradient(135deg, #f59e0b, #eab308);
+  color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;
+  transition: opacity .15s;
+}
+.daily-credit-btn:hover { opacity: .9; }
+
+/* Modal transition */
+.modal-enter-active, .modal-leave-active {
+  transition: opacity .25s ease;
+}
+.modal-enter-active .daily-credit-dialog, .modal-leave-active .daily-credit-dialog {
+  transition: transform .25s ease, opacity .25s ease;
+}
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+.modal-enter-from .daily-credit-dialog { transform: scale(0.9) translateY(10px); }
+</style>

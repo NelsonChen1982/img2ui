@@ -49,6 +49,11 @@ export const useSettingsStore = defineStore('settings', () => {
     openrouter: '',
   });
 
+  // Feature flags (controlled via env vars)
+  const features = {
+    figma: import.meta.env.VITE_FEATURE_FIGMA === 'true',
+  };
+
   /**
    * Detect language from cookie, browser, or IP
    * @returns {string} Detected language code
@@ -248,6 +253,7 @@ export const useSettingsStore = defineStore('settings', () => {
     email,
     rateLimitRemaining,
     devSettings,
+    features,
 
     // Actions
     detectLang,

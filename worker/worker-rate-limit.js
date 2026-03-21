@@ -251,10 +251,14 @@ async function getGenerationCount(db, userId) {
 }
 
 async function handleLoginCredits(db, userId, isNewUser) {
+  let welcomeAmount = 0;
+  let refillAmount = 0;
+
   // Welcome bonus for new users
   if (isNewUser) {
     await db.prepare('INSERT INTO credits_ledger (user_id, amount, type, memo) VALUES (?, ?, ?, ?)')
       .bind(userId, WELCOME_BONUS, 'welcome', 'Welcome bonus').run();
+    welcomeAmount = WELCOME_BONUS;
   }
 
   // Daily refill: check if already refilled today
@@ -263,13 +267,12 @@ async function handleLoginCredits(db, userId, isNewUser) {
   ).bind(userId).first();
 
   if ((todayRefill?.cnt || 0) === 0) {
-    const balance = await getCreditsBalance(db, userId);
-    if (balance < CREDITS_CAP) {
-      const refillAmount = Math.min(DAILY_REFILL, CREDITS_CAP - balance);
-      await db.prepare('INSERT INTO credits_ledger (user_id, amount, type, memo) VALUES (?, ?, ?, ?)')
-        .bind(userId, refillAmount, 'daily_refill', 'Daily login refill').run();
-    }
+    refillAmount = DAILY_REFILL;
+    await db.prepare('INSERT INTO credits_ledger (user_id, amount, type, memo) VALUES (?, ?, ?, ?)')
+      .bind(userId, refillAmount, 'daily_refill', 'Daily login refill').run();
   }
+
+  return { welcomeAmount, refillAmount };
 }
 
 // ─── CORS ───
@@ -856,10 +859,10 @@ export default {
       if (!env.DB) {
         return new Response(JSON.stringify({ error: 'db_not_configured' }), { status: 503, headers });
       }
-      await handleLoginCredits(env.DB, userId, false); // trigger daily refill if not yet done today
+      const { refillAmount } = await handleLoginCredits(env.DB, userId, false);
       const balance = await getCreditsBalance(env.DB, userId);
       const genCount = await getGenerationCount(env.DB, userId);
-      return new Response(JSON.stringify({ balance, canGenerate: genCount === 0 || balance > 0, checkedIn: true }), { headers });
+      return new Response(JSON.stringify({ balance, canGenerate: genCount === 0 || balance > 0, checkedIn: true, refillAmount }), { headers });
     }
 
     // ─── Credits History ───
@@ -1158,25 +1161,35 @@ export default {
 
       const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
 
-      // Public gallery: limit each user to 5 designs max (My Designs: no limit)
+      // Public gallery: logged-in users max 5 per user, anonymous max 2 per color_family
+      // My Designs: no limit
       const perUserLimit = !mine;
 
       try {
         let countSql, dataSql;
         if (perUserLimit) {
-          // CTE: rank each user's designs, keep top 5 per user
+          // Two-pass ranking:
+          // - Logged-in users: PARTITION BY user_id, keep top 5
+          // - Anonymous (user_id IS NULL): PARTITION BY color_family, keep top 2
           const cte = `WITH ranked AS (
-            SELECT d.*, ROW_NUMBER() OVER (PARTITION BY COALESCE(d.user_id, d.id) ORDER BY d.created_at DESC) as rn
+            SELECT d.*,
+              CASE
+                WHEN d.user_id IS NOT NULL
+                  THEN ROW_NUMBER() OVER (PARTITION BY d.user_id ORDER BY d.created_at DESC)
+                ELSE
+                  ROW_NUMBER() OVER (PARTITION BY d.color_family ORDER BY d.created_at DESC)
+              END as rn
             FROM design_tokens d ${where}
           )`;
-          countSql = `${cte} SELECT COUNT(*) as total FROM ranked WHERE rn <= 5`;
+          const rnFilter = `(rn <= CASE WHEN user_id IS NOT NULL THEN 5 ELSE 2 END)`;
+          countSql = `${cte} SELECT COUNT(*) as total FROM ranked WHERE ${rnFilter}`;
           dataSql = `${cte}
             SELECT r.id, r.title, r.primary_color, r.color_family, r.is_dark, r.download_count, r.created_at, r.visibility,
               r.tokens_json,
               u.name as user_name, u.avatar_url as user_avatar
             FROM ranked r
             LEFT JOIN users u ON r.user_id = u.id
-            WHERE r.rn <= 5
+            WHERE ${rnFilter}
             ORDER BY r.${sort}
             LIMIT ? OFFSET ?`;
         } else {

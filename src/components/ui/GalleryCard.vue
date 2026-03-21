@@ -33,12 +33,15 @@ const miniDS = computed(() => ({
 
 // Mobile: randomly show swatch or preview (decided once on mount)
 const showPreviewOnMobile = ref(false)
+let popRaf = null
+
 onMounted(() => {
   showPreviewOnMobile.value = Math.random() > 0.5
   document.addEventListener('click', closePopoverOutside)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('click', closePopoverOutside)
+  if (popRaf) cancelAnimationFrame(popRaf)
 })
 
 function viewDetail() {
@@ -56,6 +59,9 @@ function toggleDlPopover() {
   if (!dlOpen.value) {
     cachedDesign = null; cachedTokens = null; figmaCopied.value = false
     updatePopPosition()
+    startPositionTracking()
+  } else {
+    stopPositionTracking()
   }
   dlOpen.value = !dlOpen.value
 }
@@ -63,6 +69,7 @@ function toggleDlPopover() {
 function updatePopPosition() {
   if (!dlBtnEl.value) return
   const rect = dlBtnEl.value.getBoundingClientRect()
+  if (rect.width === 0 && rect.height === 0) { dlOpen.value = false; stopPositionTracking(); return }
   popStyle.value = {
     position: 'fixed',
     left: `${rect.left + rect.width / 2}px`,
@@ -72,12 +79,25 @@ function updatePopPosition() {
   }
 }
 
+function startPositionTracking() {
+  function track() {
+    if (!dlOpen.value) return
+    updatePopPosition()
+    popRaf = requestAnimationFrame(track)
+  }
+  popRaf = requestAnimationFrame(track)
+}
+
+function stopPositionTracking() {
+  if (popRaf) { cancelAnimationFrame(popRaf); popRaf = null }
+}
+
 function closePopoverOutside(e) {
   if (dlOpen.value && cardEl.value && !cardEl.value.contains(e.target)) {
-    // Also check if click is inside the teleported popover
     const pop = document.querySelector('.gallery-card__dl-pop')
     if (pop && pop.contains(e.target)) return
     dlOpen.value = false
+    stopPositionTracking()
   }
 }
 
@@ -277,9 +297,10 @@ async function dlFigmaCopy() {
           <span class="dl-pop__desc">for Stitch</span>
         </button>
         <div class="dl-pop__divider"></div>
-        <button class="dl-pop__item" @click="dlFigmaCopy" :disabled="dlLoading">
+        <button class="dl-pop__item" :class="{ 'dl-pop__item--disabled': !settingsStore.features.figma }" @click="settingsStore.features.figma && dlFigmaCopy()" :disabled="dlLoading || !settingsStore.features.figma">
           <i class="fa-brands fa-figma dl-pop__icon"></i>
           <span>{{ figmaCopied ? 'Copied!' : 'Copy Figma JSON' }}</span>
+          <span v-if="!settingsStore.features.figma" class="dl-pop__desc">Coming Soon</span>
           <i v-if="figmaCopied" class="fa-duotone fa-thin fa-check" style="margin-left:auto;font-size:11px;color:#22c55e;"></i>
         </button>
         <div v-if="dlLoading" class="dl-pop__loading">
@@ -480,6 +501,7 @@ async function dlFigmaCopy() {
 }
 .dl-pop__item:hover { background: #f5f5f5; }
 .dl-pop__item:disabled { opacity: .5; cursor: wait; }
+.dl-pop__item--disabled { opacity: .4; cursor: not-allowed; }
 .dl-pop__icon {
   font-size: 12px; width: 16px; text-align: center; flex-shrink: 0;
 }

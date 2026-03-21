@@ -57,7 +57,7 @@ const features = computed(() => {
     { icon: 'fa-puzzle-piece', label: { zh: '25 種元件辨識', en: '25 Component Types', ja: '25種コンポーネント' }, desc: { zh: '按鈕、卡片、導航列...', en: 'Buttons, cards, navbars...', ja: 'ボタン、カード、ナビ...' } },
     { icon: 'fa-file-export', label: { zh: '多格式匯出', en: 'Multi-format Export', ja: 'マルチ形式出力' }, desc: { zh: 'JSON / HTML / SKILL.md', en: 'JSON / HTML / SKILL.md', ja: 'JSON / HTML / SKILL.md' } },
     { icon: 'fa-microchip-ai', label: { zh: '多模型 AI', en: 'Multi-model AI', ja: 'マルチモデルAI' }, desc: { zh: 'Claude / GPT / Gemini', en: 'Claude / GPT / Gemini', ja: 'Claude / GPT / Gemini' } },
-    { icon: 'fa-figma', label: { zh: 'Figma 匯出', en: 'Figma Export', ja: 'Figma出力' }, desc: { zh: figmaLabel, en: figmaLabel, ja: figmaLabel }, faPrefix: 'fa-brands' },
+    { icon: 'fa-figma', label: { zh: 'Figma 匯出', en: 'Figma Export', ja: 'Figma出力' }, desc: { zh: figmaLabel, en: figmaLabel, ja: figmaLabel }, faPrefix: 'fa-brands', comingSoon: !settingsStore.features.figma },
   ]
 })
 
@@ -288,9 +288,17 @@ async function handleNext() {
         </p>
         <p style="margin-top:6px;font-size:11px;color:#bbb">
           <i class="fa-brands fa-figma" style="margin-right:4px"></i>
-          <a href="https://www.figma.com/community/plugin/1616731798771519323" target="_blank" rel="noopener noreferrer" style="color:#bbb;text-decoration:none;border-bottom:1px dotted #ddd">
+          <a
+            v-if="settingsStore.features.figma"
+            href="https://www.figma.com/community/plugin/1616731798771519323" target="_blank" rel="noopener noreferrer"
+            style="color:#bbb;text-decoration:none;border-bottom:1px dotted #ddd"
+          >
             {{ t({ zh: 'Figma Plugin', en: 'Figma Plugin', ja: 'Figma Plugin' }) }}
           </a>
+          <span v-else style="color:#ccc;">
+            {{ t({ zh: 'Figma Plugin', en: 'Figma Plugin', ja: 'Figma Plugin' }) }}
+            <span style="font-size:9px;color:#ddd;margin-left:4px;">Coming Soon</span>
+          </span>
         </p>
       </div>
     </div>
@@ -354,11 +362,12 @@ async function handleNext() {
 
       <!-- Feature Cards (3+3 grid) -->
       <div class="feature-grid">
-        <div v-for="f in features" :key="f.icon" class="feature-card">
+        <div v-for="f in features" :key="f.icon" class="feature-card" :class="{ 'feature-card--disabled': f.comingSoon }">
           <div class="feature-icon">
             <i :class="(f.faPrefix || 'fa-duotone fa-thin') + ' ' + f.icon"></i>
           </div>
           <div class="feature-label">{{ t(f.label) }}</div>
+          <div v-if="f.comingSoon" class="feature-coming-soon">Coming Soon</div>
         </div>
       </div>
 
@@ -442,6 +451,17 @@ async function handleNext() {
   border-radius: 10px;
   background: #f8f8f8;
   gap: 2px;
+}
+
+.feature-card--disabled {
+  opacity: .45;
+  position: relative;
+}
+.feature-coming-soon {
+  font-size: 8px;
+  font-weight: 600;
+  color: #aaa;
+  letter-spacing: .03em;
 }
 
 .feature-icon {
