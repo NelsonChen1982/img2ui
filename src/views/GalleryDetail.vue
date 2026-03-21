@@ -1,9 +1,12 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSettingsStore } from '../stores/settings'
 import { useAuthStore } from '../stores/auth'
 import { buildUIKitHTML } from '../services/uiKitRenderer'
+import { getJSONOutput, downloadSKILL, downloadSKILLZip, downloadHTML, downloadDesignMD } from '../services/downloadService'
+import { buildFigmaJSON } from '../services/figmaJsonBuilder'
+import { COMP_META } from '../data/compMeta'
 import { isLight, ha, darken, safeTextColor } from '../services/colorUtils'
 import DesignPreviewCard from '../components/ui/DesignPreviewCard.vue'
 
@@ -167,29 +170,22 @@ function copyJSON() {
   })
 }
 
-function downloadJSON() {
-  incrementDownload()
-  const blob = new Blob([jsonText.value], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${design.value?.title || 'design-tokens'}.json`
-  a.click()
-  URL.revokeObjectURL(url)
+// ── Download popover ──
+const dlOpen = ref(false)
+const dlBtnEl = ref(null)
+const figmaCopied = ref(false)
+
+function toggleDlPopover() {
+  dlOpen.value = !dlOpen.value
+  if (dlOpen.value) figmaCopied.value = false
 }
 
-function downloadHTMLFile() {
-  incrementDownload()
-  const html = uiKitHTML.value
-  if (!html) return
-  const full = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(design.value?.title || 'UI Kit Preview')}</title></head><body style="margin:0;background:${tokens.value?.colors?.surface || '#fff'};">${html}</body></html>`
-  const blob = new Blob([full], { type: 'text/html' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${design.value?.title || 'ui-kit'}.html`
-  a.click()
-  URL.revokeObjectURL(url)
+function closeDlOutside(e) {
+  if (!dlOpen.value) return
+  if (dlBtnEl.value?.contains(e.target)) return
+  const pop = document.querySelector('.detail-dl-pop')
+  if (pop?.contains(e.target)) return
+  dlOpen.value = false
 }
 
 function incrementDownload() {
@@ -200,7 +196,63 @@ function incrementDownload() {
   fetch(`${apiBase}/api/gallery/${props.id}/download`, { method: 'POST', headers: hdrs }).catch(() => {})
 }
 
-onMounted(fetchDesign)
+function dlJSON() {
+  if (!tokens.value) return
+  incrementDownload()
+  const out = getJSONOutput(tokens.value, annotations.value, COMP_META, Object.values(tokens.value.colors || {}), 'tailwind', null, [])
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = `${design.value?.title || 'design-system'}.json`
+  a.click(); URL.revokeObjectURL(url)
+  dlOpen.value = false
+}
+
+function dlHTML() {
+  if (!tokens.value) return
+  incrementDownload()
+  downloadHTML(tokens.value, uiKitHTML.value)
+  dlOpen.value = false
+}
+
+function dlSKILL() {
+  if (!tokens.value) return
+  incrementDownload()
+  downloadSKILL(tokens.value, annotations.value, settingsStore.lang, COMP_META, Object.values(tokens.value.colors || {}), 'tailwind', null)
+  dlOpen.value = false
+}
+
+async function dlSKILLZip() {
+  if (!tokens.value) return
+  incrementDownload()
+  await downloadSKILLZip(tokens.value, null, annotations.value, settingsStore.lang, COMP_META, Object.values(tokens.value.colors || {}), 'tailwind', null, [])
+  dlOpen.value = false
+}
+
+function dlDesignMD() {
+  if (!tokens.value) return
+  incrementDownload()
+  let holistic = null
+  try { holistic = JSON.parse(design.value.holistic_json || '{}') } catch {}
+  downloadDesignMD(tokens.value, holistic, settingsStore.lang)
+  dlOpen.value = false
+}
+
+function dlFigmaCopy() {
+  if (!tokens.value) return
+  const figma = buildFigmaJSON(tokens.value)
+  if (!figma) return
+  navigator.clipboard.writeText(JSON.stringify(figma, null, 2))
+  figmaCopied.value = true
+  setTimeout(() => { figmaCopied.value = false }, 2500)
+}
+
+onMounted(() => {
+  fetchDesign()
+  document.addEventListener('click', closeDlOutside)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeDlOutside)
+})
 </script>
 
 <template>
@@ -258,32 +310,47 @@ onMounted(fetchDesign)
               <i :class="designVisibility === 'public' ? 'fa-duotone fa-thin fa-globe' : 'fa-duotone fa-thin fa-lock'" style="font-size:12px;"></i>
               {{ designVisibility === 'public' ? 'Public' : 'Private' }}
             </button>
-            <button class="detail-btn" @click="downloadJSON">
-              <i class="fa-duotone fa-thin fa-arrow-down-to-bracket" style="font-size:12px;"></i>
-              JSON
-            </button>
-            <button class="detail-btn" @click="downloadHTMLFile">
-              <i class="fa-duotone fa-thin fa-browser" style="font-size:12px;"></i>
-              HTML
-            </button>
-          </div>
-        </div>
-
-        <!-- Cover Hero Preview -->
-        <div v-if="tokens?.colors?.primary" class="detail-section detail-cover" :style="{ background: coverBg }">
-          <div class="detail-cover__inner">
-            <!-- Left: title + meta -->
-            <div class="detail-cover__left">
-              <div class="detail-cover__title" :style="{ color: coverTextColor, fontFamily: tokens.fonts?.heading || 'Inter' }">
-                {{ design.title || displayName }}
-              </div>
-              <div class="detail-cover__sub" :style="{ color: coverSubColor }">
-                {{ displayDate }} · {{ design.is_dark ? 'Dark' : 'Light' }} · {{ design.download_count || 0 }} downloads
-              </div>
-            </div>
-            <!-- Right: mini component preview -->
-            <div class="detail-cover__preview">
-              <DesignPreviewCard :ds="tokens" />
+            <div style="position:relative;">
+              <button ref="dlBtnEl" class="detail-btn" @click.stop="toggleDlPopover">
+                <i class="fa-duotone fa-thin fa-arrow-down-to-bracket" style="font-size:12px;"></i>
+                Download
+              </button>
+              <Transition name="pop">
+                <div v-if="dlOpen" class="detail-dl-pop" @click.stop>
+                  <button class="dl-pop__item" @click="dlJSON">
+                    <i class="fa-duotone fa-thin fa-brackets-curly dl-pop__icon"></i>
+                    <span>JSON</span>
+                    <span class="dl-pop__desc">Design Tokens</span>
+                  </button>
+                  <button class="dl-pop__item" @click="dlHTML">
+                    <i class="fa-duotone fa-thin fa-browser dl-pop__icon"></i>
+                    <span>HTML</span>
+                    <span class="dl-pop__desc">UI Kit Preview</span>
+                  </button>
+                  <button class="dl-pop__item" @click="dlSKILL">
+                    <i class="fa-duotone fa-thin fa-wand-magic-sparkles dl-pop__icon"></i>
+                    <span>SKILL.md</span>
+                    <span class="dl-pop__desc">Coding Agent</span>
+                  </button>
+                  <button class="dl-pop__item" @click="dlSKILLZip">
+                    <i class="fa-duotone fa-thin fa-folder-open dl-pop__icon"></i>
+                    <span>SKILL.zip</span>
+                    <span class="dl-pop__desc">Light + Dark</span>
+                  </button>
+                  <button class="dl-pop__item" @click="dlDesignMD">
+                    <i class="fa-duotone fa-thin fa-palette dl-pop__icon"></i>
+                    <span>DESIGN.md</span>
+                    <span class="dl-pop__desc">for Stitch</span>
+                  </button>
+                  <div class="dl-pop__divider"></div>
+                  <button class="dl-pop__item" :class="{ 'dl-pop__item--disabled': !settingsStore.features.figma }" @click="settingsStore.features.figma && dlFigmaCopy()" :disabled="!settingsStore.features.figma">
+                    <i class="fa-brands fa-figma dl-pop__icon"></i>
+                    <span>{{ figmaCopied ? 'Copied!' : 'Copy Figma JSON' }}</span>
+                    <span v-if="!settingsStore.features.figma" class="dl-pop__desc">Coming Soon</span>
+                    <i v-if="figmaCopied" class="fa-duotone fa-thin fa-check" style="margin-left:auto;font-size:11px;color:#22c55e;"></i>
+                  </button>
+                </div>
+              </Transition>
             </div>
           </div>
         </div>
@@ -404,6 +471,55 @@ onMounted(fetchDesign)
 .detail-cover__preview {
   flex-shrink: 0; width: 240px; border-radius: 12px; overflow: hidden;
   box-shadow: 0 8px 24px rgba(0,0,0,.15);
+}
+
+/* ── Download Popover ── */
+.detail-dl-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  padding: 4px;
+  min-width: 210px;
+  z-index: 10;
+}
+.detail-dl-pop::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  right: 20px;
+  transform: rotate(45deg);
+  width: 8px; height: 8px;
+  background: #fff;
+  border-left: 1px solid #e0e0e0;
+  border-top: 1px solid #e0e0e0;
+}
+.dl-pop__item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 8px 10px; border: none; border-radius: 7px;
+  background: transparent; font-size: 12px; font-weight: 500; color: #333;
+  cursor: pointer; text-align: left; transition: background .12s;
+}
+.dl-pop__item:hover { background: #f5f5f5; }
+.dl-pop__item:disabled { opacity: .5; cursor: not-allowed; }
+.dl-pop__item--disabled { opacity: .4; cursor: not-allowed; }
+.dl-pop__icon {
+  font-size: 12px; width: 16px; text-align: center; flex-shrink: 0;
+}
+.dl-pop__desc {
+  margin-left: auto; font-size: 10px; color: #aaa; font-weight: 400;
+}
+.dl-pop__divider {
+  height: 1px; background: #f0f0f0; margin: 2px 6px;
+}
+.pop-enter-active, .pop-leave-active {
+  transition: opacity .15s ease, transform .15s ease;
+}
+.pop-enter-from, .pop-leave-to {
+  opacity: 0; transform: translateY(-4px);
 }
 
 /* ── Original Image ── */
